@@ -77,7 +77,7 @@ def get_google_sheets_service():
 
     return build('sheets', 'v4', credentials=creds)
 
-def get_sheet_data(service, spreadsheet_id, range_name):
+def get_sheet_data(service, spreadsheet_id, range_name, silent=False):
     """Puxa os dados de uma aba específica da planilha e converte para Pandas DataFrame."""
     try:
         sheet = service.spreadsheets()
@@ -118,7 +118,8 @@ def get_sheet_data(service, spreadsheet_id, range_name):
         df = pd.DataFrame(adjusted_data, columns=header)
         return df
     except Exception as e:
-        st.error(f"Erro ao ler a planilha ID {spreadsheet_id}: {e}")
+        if not silent:
+            st.error(f"Erro ao ler a planilha ID {spreadsheet_id}: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=600)
@@ -134,17 +135,17 @@ def carregar_dados():
     # Como não sei os nomes das abas, vou tentar pegar o Range padrão de Dados. Se falhar, você me avisa os nomes das abas depois.
     # ——— Processar Folha de Pagamento (Múltiplas Abas de Meses) ———
     # Lista de abas que representam meses (baseado na estrutura da planilha)
-    abas_meses = ['Outubro', 'Novembro', 'Dezembro', 'Janeiro', 'Fevereiro']
+    abas_meses = ['Outubro', 'Novembro', 'Dezembro', 'Janeiro', 'Fevereiro', 'Março']
     map_mes_pt = {
         'Outubro': '10/2025', 'Novembro': '11/2025', 'Dezembro': '12/2025',
-        'Janeiro': '01/2026', 'Fevereiro': '02/2026' # Adicione novos meses aqui
+        'Janeiro': '01/2026', 'Fevereiro': '02/2026', 'Março': '03/2026'
     }
     
     dfs_folha = []
     for aba in abas_meses:
         try:
-            # Range mais amplo 'A:Z' para evitar erro se houver colunas extras ocultas
-            df_m = get_sheet_data(service, ID_FOLHA, f"'{aba}'!A:Z")
+            # Silent=True para não travar se o mês ainda não foi criado na folha
+            df_m = get_sheet_data(service, ID_FOLHA, f"'{aba}'!A:Z", silent=True)
             if not df_m.empty:
                 df_m['Mes_Ano'] = map_mes_pt.get(aba, 'Desconhecido')
                 # Garantir que a coluna 'Vídeos' existe e é tratada como número
@@ -232,7 +233,8 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
 
         # Processar Prioridades (Aba Central)
         if not df_prioridades.empty:
-            col_data_pr = find_date_col(df_prioridades)
+            # PRIORIDADE: Usar 'Prazo real' para alinhar com a visualização do usuário
+            col_data_pr = next((c for c in df_prioridades.columns if 'prazo' in c.lower()), find_date_col(df_prioridades))
             df_prioridades['_Data'] = df_prioridades[col_data_pr].apply(robust_date_parse)
             df_prioridades['_Mes_Ano'] = df_prioridades['_Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
 
@@ -497,5 +499,54 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
                 st.dataframe(df_ocorrencias_fora[cols_view], use_container_width=True, hide_index=True)
             else:
                 st.info("Sem dados detalhados.")
+        
+        st.divider()
+
+        # ---------------- SEÇÃO 4: CENTRAL DE AVISOS (ALERTAS CRÍTICOS) ----------------
+        st.header("🔔 Central de Avisos - Gestão de Prazos")
+        
+        if not df_prioridades.empty:
+            hoje = pd.Timestamp.now().normalize()
+            fim_semana = hoje + pd.Timedelta(days=(6 - hoje.weekday()))
+            
+            # 1. ATRASADOS (Prazo real < hoje E não entregue)
+            mask_atrasados = (
+                (df_prioridades['_Data'] < hoje) & 
+                (df_prioridades['Entregue'].str.lower() != 'entregou')
+            )
+            df_atrasados = df_prioridades[mask_atrasados].copy()
+            
+            # 2. NA SEMANA (hoje <= Prazo real <= domingo E não entregue)
+            mask_semana = (
+                (df_prioridades['_Data'] >= hoje) & 
+                (df_prioridades['_Data'] <= fim_semana) &
+                (df_prioridades['Entregue'].str.lower() != 'entregou')
+            )
+            df_semana = df_prioridades[mask_semana].copy()
+            
+            cols_avisos = ['Nome', 'Editor', 'Prazo real', 'Entregue', 'Bloco']
+
+            # Exibir Atrasados
+            with st.container():
+                st.subheader("🚨 Atrasados (Ação Imediata)")
+                if not df_atrasados.empty:
+                    st.error(f"⚠️ **{len(df_atrasados)} demandas** estão com o prazo vencido! Cobrar agora.")
+                    st.dataframe(df_atrasados[cols_avisos].sort_values('Prazo real'), use_container_width=True, hide_index=True)
+                else:
+                    st.success("✅ Nenhum atraso detectado.")
+
+            st.write("") # Espaçador
+
+            # Exibir Na Semana
+            with st.container():
+                st.subheader("📅 Entregas desta Semana")
+                if not df_semana.empty:
+                    st.warning(f"🔔 **{len(df_semana)} demandas** vencem até domingo.")
+                    st.dataframe(df_semana[cols_avisos].sort_values('Prazo real'), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhuma entrega prevista para o restante da semana.")
+        else:
+            st.info("Dados de Prioridades não disponíveis para gerar avisos.")
+
     else:
         st.warning("Aguardando carregamento de dados / Falha na autenticação.")
