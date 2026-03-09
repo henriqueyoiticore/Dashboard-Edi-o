@@ -87,8 +87,35 @@ def get_sheet_data(service, spreadsheet_id, range_name):
         if not values:
             return pd.DataFrame()
             
-        # Transforma os dados retornados em um DataFrame do Pandas usando a 1ª linha como cabeçalho
-        df = pd.DataFrame(values[1:], columns=values[0])
+        # Transforma os dados retornados em um DataFrame do Pandas
+        header = values[0]
+        data = values[1:]
+        
+        # Garantir colunas únicas (ex: '', '', '' -> 'Unnamed_1', 'Unnamed_2')
+        new_header = []
+        counts = {}
+        for h in header:
+            val = str(h).strip()
+            if val == "": val = "Unnamed"
+            if val in counts:
+                counts[val] += 1
+                new_header.append(f"{val}_{counts[val]}")
+            else:
+                counts[val] = 0
+                new_header.append(val)
+        header = new_header
+
+        # Ajusta as linhas para terem o mesmo tamanho do cabeçalho
+        num_cols = len(header)
+        adjusted_data = []
+        for row in data:
+            if len(row) < num_cols:
+                row.extend([''] * (num_cols - len(row)))
+            elif len(row) > num_cols:
+                row = row[:num_cols]
+            adjusted_data.append(row)
+
+        df = pd.DataFrame(adjusted_data, columns=header)
         return df
     except Exception as e:
         st.error(f"Erro ao ler a planilha ID {spreadsheet_id}: {e}")
@@ -105,8 +132,31 @@ def carregar_dados():
     
     # IMPORTANTE: A API do Sheets precisa do nome da aba + Range se houver múltiplas abas.
     # Como não sei os nomes das abas, vou tentar pegar o Range padrão de Dados. Se falhar, você me avisa os nomes das abas depois.
+    # ——— Processar Folha de Pagamento (Múltiplas Abas de Meses) ———
+    # Lista de abas que representam meses (baseado na estrutura da planilha)
+    abas_meses = ['Outubro', 'Novembro', 'Dezembro', 'Janeiro', 'Fevereiro']
+    map_mes_pt = {
+        'Outubro': '10/2025', 'Novembro': '11/2025', 'Dezembro': '12/2025',
+        'Janeiro': '01/2026', 'Fevereiro': '02/2026' # Adicione novos meses aqui
+    }
+    
+    dfs_folha = []
+    for aba in abas_meses:
+        try:
+            # Range mais amplo 'A:Z' para evitar erro se houver colunas extras ocultas
+            df_m = get_sheet_data(service, ID_FOLHA, f"'{aba}'!A:Z")
+            if not df_m.empty:
+                df_m['Mes_Ano'] = map_mes_pt.get(aba, 'Desconhecido')
+                # Garantir que a coluna 'Vídeos' existe e é tratada como número
+                col_v = next((c for c in df_m.columns if 'vídeo' in c.lower() or 'video' in c.lower()), None)
+                if col_v:
+                    df_m['_Producao'] = pd.to_numeric(df_m[col_v], errors='coerce').fillna(0)
+                dfs_folha.append(df_m)
+        except: continue
+        
+    df_folha = pd.concat(dfs_folha, ignore_index=True) if dfs_folha else pd.DataFrame()
+
     df_ajustes = get_sheet_data(service, ID_AJUSTES, 'A:Z')
-    df_folha = get_sheet_data(service, ID_FOLHA, 'A:Z')
     df_ocorrencias = get_sheet_data(service, ID_OCORRENCIAS_1, 'A:Z')
     df_ocorrencias_fora = get_sheet_data(service, ID_OCORRENCIAS_FORA, 'A:Z')
     # Aba com ranking consolidado (sem data - usada quando filtro = Todos)
@@ -170,16 +220,26 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
         df_ocorrencias_fora['Data'] = df_ocorrencias_fora[col_data_fora].apply(robust_date_parse)
         df_ocorrencias_fora['Mes_Ano'] = df_ocorrencias_fora['Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
         
-        # Processar Folha
-        col_data_folha = find_date_col(df_folha)
-        df_folha['Data'] = df_folha[col_data_folha].apply(robust_date_parse)
-        df_folha['Mes_Ano'] = df_folha['Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
+        # Processar Folha (Já vem com Mes_Ano do carregar_dados)
+        if not df_folha.empty:
+            # Se já tivermos _Producao, não precisamos de find_date_col pra Folha (ela é mensal)
+            # Mas para o filtro global de datas, podemos tentar inferir uma data fictícia do mês
+            def inferir_data_folha(mes_ano):
+                try:
+                    return pd.to_datetime(f"01/{mes_ano}", format="%d/%m/%Y")
+                except: return pd.NaT
+            df_folha['Data'] = df_folha['Mes_Ano'].apply(inferir_data_folha)
 
         # Processar Prioridades (Aba Central)
         if not df_prioridades.empty:
             col_data_pr = find_date_col(df_prioridades)
             df_prioridades['_Data'] = df_prioridades[col_data_pr].apply(robust_date_parse)
             df_prioridades['_Mes_Ano'] = df_prioridades['_Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
+
+        # Ordenar por data (Mais recentes primeiro)
+        df_ocorrencias = df_ocorrencias.sort_values('Data', ascending=False)
+        df_ocorrencias_fora = df_ocorrencias_fora.sort_values('Data', ascending=False)
+        df_folha = df_folha.sort_values('Data', ascending=False) if not df_folha.empty else df_folha
 
         # 📌 MANTENDO OS DADOS BRUTOS E CRIANDO O ÍNDICE DE PROLIXIDADE
         col_descricao = next((col for col in df_ocorrencias.columns if any(k in col.lower() for k in ['detalhamento', 'descri', 'ocorrencia'])), df_ocorrencias.columns[3] if len(df_ocorrencias.columns) > 3 else df_ocorrencias.columns[-1])
@@ -266,10 +326,14 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
 
         if filtro_label != "Todos":
             filtro_mes = map_filtro[filtro_label]
-            df_ocorrencias = df_ocorrencias[df_ocorrencias['Mes_Ano'] == filtro_mes] if not df_ocorrencias.empty else df_ocorrencias
-            df_ocorrencias_fora = df_ocorrencias_fora[df_ocorrencias_fora['Mes_Ano'] == filtro_mes]
-            df_folha = df_folha[df_folha['Mes_Ano'] == filtro_mes] if not df_folha.empty else df_folha
-            df_prioridades = df_prioridades[df_prioridades['_Mes_Ano'] == filtro_mes] if not df_prioridades.empty else df_prioridades
+            if not df_ocorrencias.empty and 'Mes_Ano' in df_ocorrencias.columns:
+                df_ocorrencias = df_ocorrencias[df_ocorrencias['Mes_Ano'] == filtro_mes]
+            if not df_ocorrencias_fora.empty and 'Mes_Ano' in df_ocorrencias_fora.columns:
+                df_ocorrencias_fora = df_ocorrencias_fora[df_ocorrencias_fora['Mes_Ano'] == filtro_mes]
+            if not df_folha.empty and 'Mes_Ano' in df_folha.columns:
+                df_folha = df_folha[df_folha['Mes_Ano'] == filtro_mes]
+            if not df_prioridades.empty and '_Mes_Ano' in df_prioridades.columns:
+                df_prioridades = df_prioridades[df_prioridades['_Mes_Ano'] == filtro_mes]
 
         # ---------------- PREPARAÇÃO DO RANKING DE EDITORES (Sempre via Prioridades) ----------------
         df_ranking_editores = pd.DataFrame(columns=['Editor', 'Demandas'])
@@ -293,10 +357,15 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
         # ---------------- KPIs PRINCIPAIS ----------------
         total_ocorrencias_gerais = len(df_ocorrencias)
         total_fora_controle = len(df_ocorrencias_fora)
-        total_videos = len(df_folha) 
+        
+        # SOMA REAL DE VÍDEOS (Folha de Pagamento)
+        if not df_folha.empty and '_Producao' in df_folha.columns:
+            total_videos = int(df_folha['_Producao'].sum())
+        else:
+            total_videos = 0
         
         col1, col2, col3 = st.columns(3)
-        col1.metric("Videos Produzidos", total_videos)
+        col1.metric("Videos Produzidos", f"{total_videos:,}".replace(',', '.'))
         col2.metric("Ocorrências Totais", total_ocorrencias_gerais)
         col3.metric("Erros Fora do Controle", total_fora_controle, delta_color="inverse")
         
@@ -425,7 +494,7 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
             if not df_ocorrencias_fora.empty:
                 # Mostrar as colunas mais relevantes
                 cols_view = [c for c in df_ocorrencias_fora.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
-                st.dataframe(df_ocorrencias_fora[cols_view].head(10), use_container_width=True, hide_index=True)
+                st.dataframe(df_ocorrencias_fora[cols_view], use_container_width=True, hide_index=True)
             else:
                 st.info("Sem dados detalhados.")
     else:
