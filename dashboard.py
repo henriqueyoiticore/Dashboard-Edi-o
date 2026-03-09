@@ -185,7 +185,7 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
         col_descricao = next((col for col in df_ocorrencias.columns if any(k in col.lower() for k in ['detalhamento', 'descri', 'ocorrencia'])), df_ocorrencias.columns[3] if len(df_ocorrencias.columns) > 3 else df_ocorrencias.columns[-1])
         df_ocorrencias['Texto_Bruto'] = df_ocorrencias[col_descricao].fillna("Sem descrição")
         
-        # 📌 NOVA CATEGORIZAÇÃO DE OCORRÊNCIAS
+        # 📌 NOVA CATEGORIZAÇÃO DE OCORRÊNCIAS (SEÇÃO EDIÇÃO)
         def categorizar(texto):
             t = str(texto).lower()
             if any(q in t for q in ['prazo', 'atraso', 'demora', 'quando', 'cade', 'cadê', 'cobrança', 'pronto', 'prontos', 'falta', 'hoje', 'ainda n', 'dia']): return "COBRANÇA DE PRAZO"
@@ -201,6 +201,19 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
             return "OUTROS"
             
         df_ocorrencias['Tipo_Ocorrência'] = df_ocorrencias['Texto_Bruto'].apply(categorizar)
+
+        # 📌 NOVA CATEGORIZAÇÃO DE OCORRÊNCIAS (FORA DA EDIÇÃO)
+        def categorizar_fora(texto):
+            t = str(texto).lower()
+            if any(q in t for q in ['status', 'planilha', 'não mudaram', 'não colocaram', 'saber que tem', 'manual']): return "PROCESSO/STATUS (PLANILHA)"
+            if any(q in t for q in ['corrompido', 'grava', 'áudio', 'ruim', 'inalterado', 'separado', 'incompleto', 'baixa qualidade']): return "PROB. TÉCNICO (GRAVAÇÃO)"
+            if any(q in t for q in ['desorganizado', 'bagunça', 'quebra cabeça', 'procurar', 'pasta', 'drive', 'Dropbox']): return "DESORGANIZAÇÃO DE DRIVE"
+            if any(q in t for q in ['upload', 'subiu', 'demora', 'atraso', 'link']): return "ATRASO DE UPLOAD/LINK"
+            if any(q in t for q in ['ajuste', 'alteração', 'meses depois', 'tempo depois', 'antigo', 'refazer', 'picado']): return "AJUSTES TARDIOS/PICADOS"
+            return "OUTROS"
+
+        col_desc_fora = next((col for col in df_ocorrencias_fora.columns if any(k in col.lower() for k in ['incidente', 'descri', 'ocorrencia'])), df_ocorrencias_fora.columns[1] if len(df_ocorrencias_fora.columns) > 1 else df_ocorrencias_fora.columns[-1])
+        df_ocorrencias_fora['Tipo_Ocorrência'] = df_ocorrencias_fora[col_desc_fora].fillna("Sem descrição").apply(categorizar_fora)
 
     except Exception as e:
         st.warning(f"Aviso no tratamento dos dados: {e}")
@@ -376,11 +389,44 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
         st.divider()
         
         # ---------------- SEÇÃO 3: OCORRÊNCIAS FORA DE CONTROLE (CRÍTICAS) ----------------
-        st.subheader("🚨 Ocorrências Fora de Controle")
-        st.caption("Estatísticas baseadas na planilha do Gerente (Erros fora do setor de Edição)")
-        if len(df_ocorrencias_fora) > 0:
-            st.dataframe(df_ocorrencias_fora.head(10), use_container_width=True)
-        else:
-            st.info("Sem ocorrências fora de controle registradas neste período.")
+        col_fora_1, col_fora_2 = st.columns([1, 1])
+        
+        with col_fora_1:
+            st.subheader("🚨 Erros Fora da Edição (Tipos)")
+            st.caption("Problemas que impactam a edição mas vêm de fora (CS/Mento/Gravação).")
+            
+            if 'Tipo_Ocorrência' in df_ocorrencias_fora.columns and not df_ocorrencias_fora.empty:
+                df_tipos_fora = df_ocorrencias_fora['Tipo_Ocorrência'].value_counts().reset_index()
+                df_tipos_fora.columns = ['Categoria', 'Quantidade']
+                total_f = df_tipos_fora['Quantidade'].sum()
+                
+                df_tipos_fora['Percentual'] = (df_tipos_fora['Quantidade'] / total_f * 100)
+                df_tipos_fora['LabelText'] = df_tipos_fora.apply(lambda r: f"{r['Quantidade']} ({r['Percentual']:.1f}%)", axis=1)
+                df_tipos_fora = df_tipos_fora.sort_values('Quantidade', ascending=True)
+                
+                fig3 = px.bar(df_tipos_fora, x='Quantidade', y='Categoria', orientation='h', text='LabelText')
+                fig3.update_traces(marker_color='#f39c12', textposition='outside') # Laranja para diferenciar
+                fig3.update_layout(
+                    xaxis_title="Quantidade",
+                    yaxis_title="",
+                    showlegend=False,
+                    xaxis={"showgrid": True, "gridcolor": "#444"},
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    margin={"l": 0, "r": 0, "t": 10, "b": 10}
+                )
+                st.plotly_chart(fig3, use_container_width=True)
+            else:
+                st.info("Nenhuma ocorrência externa registrada neste período.")
+
+        with col_fora_2:
+            st.subheader("📋 Lista de Incidentes Externos")
+            st.caption("Últimos registros da planilha do gerente.")
+            if not df_ocorrencias_fora.empty:
+                # Mostrar as colunas mais relevantes
+                cols_view = [c for c in df_ocorrencias_fora.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
+                st.dataframe(df_ocorrencias_fora[cols_view].head(10), use_container_width=True, hide_index=True)
+            else:
+                st.info("Sem dados detalhados.")
     else:
         st.warning("Aguardando carregamento de dados / Falha na autenticação.")
