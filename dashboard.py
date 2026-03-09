@@ -326,6 +326,9 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
                 st.cache_data.clear()
                 st.rerun()
 
+        # Criar cópia bruta para a Central de Avisos (Não afetada pelos filtros de mês)
+        df_prioridades_raw = df_prioridades.copy() if not df_prioridades.empty else pd.DataFrame()
+
         if filtro_label != "Todos":
             filtro_mes = map_filtro[filtro_label]
             if not df_ocorrencias.empty and 'Mes_Ano' in df_ocorrencias.columns:
@@ -493,36 +496,47 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
         with col_fora_2:
             st.subheader("📋 Lista de Incidentes Externos")
             st.caption("Últimos registros da planilha do gerente.")
+            
             if not df_ocorrencias_fora.empty:
+                # Sistema de busca por Cliente
+                busca_cliente = st.text_input("🔍 Buscar por Cliente", placeholder="Digite o nome do cliente...")
+                
+                df_filtrado_fora = df_ocorrencias_fora.copy()
+                if busca_cliente:
+                    # Tentar encontrar a coluna de cliente
+                    col_cliente = next((c for c in df_ocorrencias_fora.columns if 'cliente' in c.lower()), None)
+                    if col_cliente:
+                        df_filtrado_fora = df_filtrado_fora[df_filtrado_fora[col_cliente].astype(str).str.contains(busca_cliente, case=False, na=False)]
+                
                 # Mostrar as colunas mais relevantes
-                cols_view = [c for c in df_ocorrencias_fora.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
-                st.dataframe(df_ocorrencias_fora[cols_view], use_container_width=True, hide_index=True)
+                cols_view = [c for c in df_filtrado_fora.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
+                st.dataframe(df_filtrado_fora[cols_view], use_container_width=True, hide_index=True)
             else:
                 st.info("Sem dados detalhados.")
         
         st.divider()
 
-        # ---------------- SEÇÃO 4: CENTRAL DE AVISOS (ALERTAS CRÍTICOS) ----------------
+        # ---------------- SEÇÃO 4: CENTRAL DE AVISOS (ALERTAS CRÍTICOS - FIXO) ----------------
         st.header("🔔 Central de Avisos - Gestão de Prazos")
         
-        if not df_prioridades.empty:
+        if not df_prioridades_raw.empty:
             hoje = pd.Timestamp.now().normalize()
             fim_semana = hoje + pd.Timedelta(days=(6 - hoje.weekday()))
             
-            # 1. ATRASADOS (Prazo real < hoje E não entregue)
+            # 1. ATRASADOS (Prazo real < hoje E não entregue) - USANDO DADOS BRUTOS (FIXO)
             mask_atrasados = (
-                (df_prioridades['_Data'] < hoje) & 
-                (df_prioridades['Entregue'].str.lower() != 'entregou')
+                (df_prioridades_raw['_Data'] < hoje) & 
+                (df_prioridades_raw['Entregue'].str.lower() != 'entregou')
             )
-            df_atrasados = df_prioridades[mask_atrasados].copy()
+            df_atrasados = df_prioridades_raw[mask_atrasados].copy()
             
-            # 2. NA SEMANA (hoje <= Prazo real <= domingo E não entregue)
+            # 2. NA SEMANA (hoje <= Prazo real <= domingo E não entregue) - USANDO DADOS BRUTOS (FIXO)
             mask_semana = (
-                (df_prioridades['_Data'] >= hoje) & 
-                (df_prioridades['_Data'] <= fim_semana) &
-                (df_prioridades['Entregue'].str.lower() != 'entregou')
+                (df_prioridades_raw['_Data'] >= hoje) & 
+                (df_prioridades_raw['_Data'] <= fim_semana) &
+                (df_prioridades_raw['Entregue'].str.lower() != 'entregou')
             )
-            df_semana = df_prioridades[mask_semana].copy()
+            df_semana = df_prioridades_raw[mask_semana].copy()
             
             cols_avisos = ['Nome', 'Editor', 'Prazo real', 'Entregue', 'Bloco']
 
