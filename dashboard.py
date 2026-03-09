@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import os
 from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -37,27 +38,42 @@ st.markdown("""
 # 1. AUTENTICAÇÃO E EXTRAÇÃO DE DADOS VIA API
 # =====================================================================
 def get_google_sheets_service():
-    """Autentica o usuário pelo navegador e retorna o serviço do Sheets."""
+    """Autentica o acesso ao Sheets (Suporta Modo Local e Cloud)."""
+    
+    # 1. Tentar Autenticação via Service Account (Recomendado para Streamlit Cloud)
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds = service_account.Credentials.from_service_account_info(
+                dict(st.secrets["gcp_service_account"]), scopes=SCOPES
+            )
+            return build('sheets', 'v4', credentials=creds)
+    except:
+        pass # Ignora erro de segredos não encontrados localmente
+
+    # 2. Modo Local / Fallback (OAuth User Flow)
     creds = None
-    # O arquivo token.json armazena os tokens de acesso e de atualização do usuário
-    # e é criado automaticamente quando o fluxo de autorização for concluído pela 1ª vez.
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
         
-    # Se não houver credenciais (inválidas) disponíveis, peça ao usuário para fazer login.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not os.path.exists('client_secret.json'):
-                st.error("Arquivo `client_secret.json` não encontrado. Por favor, coloque-o na mesma pasta do script.")
+            # Se não temos token e estamos no Cloud, o run_local_server vai falhar
+            # Verificamos se client_secret existe para tentar o fluxo local
+            if os.path.exists('client_secret.json'):
+                try:
+                    flow = InstalledAppFlow.from_client_secrets_file('client_secret.json', SCOPES)
+                    creds = flow.run_local_server(port=0)
+                    with open('token.json', 'w') as token:
+                        token.write(creds.to_json())
+                except Exception as e:
+                    st.error("Erro de Autenticação: O servidor não pode abrir um navegador para login.")
+                    st.info("👉 Para rodar no nuvem (Streamlit Cloud), você deve usar uma **Service Account**.")
+                    st.stop()
+            else:
+                st.error("Credenciais Google não encontradas (client_secret.json ou st.secrets).")
                 st.stop()
-            flow = InstalledAppFlow.from_client_secrets_file('client_secret.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-            
-        # Salve as credenciais para a próxima execução
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
 
     return build('sheets', 'v4', credentials=creds)
 
@@ -229,6 +245,11 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
 
             st.sidebar.header("Filtros Visuais")
             filtro_label = st.sidebar.selectbox("Selecione o Mês:", ["Todos"] + meses_formatados)
+            
+            st.sidebar.divider()
+            if st.sidebar.button("🔄 Atualizar Dados"):
+                st.cache_data.clear()
+                st.rerun()
 
         if filtro_label != "Todos":
             filtro_mes = map_filtro[filtro_label]
