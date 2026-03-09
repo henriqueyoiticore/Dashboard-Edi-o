@@ -19,18 +19,97 @@ ID_OCORRENCIAS_FORA = '16noLo9yfByjZLh4ZPbROz8p-RWdFZpxtiU2Uhz6ffhw'
 ID_ORDEM_PRIORIDADE = '1IAPh05sT-HlQPUdhJ9WYdgDK2Frjb_YLbzHrznVZz5o'
 
 # =====================================================================
-# CONFIGURAÇÃO INICIAL DA PÁGINA
+# CONFIGURAÇÃO INICIAL DA PÁGINA - FrameControl DNA
 # =====================================================================
 st.set_page_config(
-    page_title="Dashboard de Monitoramento | Edição Vídeos",
-    page_icon="🎬",
-    layout="wide"
+    page_title="FrameControl | Dashboard de Edição",
+    page_icon="🎞️",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+# Injeção de CSS para Identidade Visual "Precision Cut"
 st.markdown("""
     <style>
-        .block-container { padding-top: 2rem; padding-bottom: 0rem; }
-        .stMetric { border: 1px solid #333; padding: 10px; border-radius: 5px; box-shadow: 1px 1px 5px rgba(0,0,0,0.1); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
+
+        :root {
+            --surface-page: #F8FAFC;
+            --surface-card: #FFFFFF;
+            --accent-primary: #8B5CF6;
+            --text-primary: #1E293B;
+            --text-secondary: #334155;
+            --border-subtle: rgba(0,0,0,0.06);
+            --status-error: #EF4444;
+            --status-warning: #F59E0B;
+            --status-success: #10B981;
+        }
+
+        /* Estrutura Base */
+        .stApp {
+            background-color: var(--surface-page);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Sidebar Customizada */
+        [data-testid="stSidebar"] {
+            background-color: #FFFFFF;
+            border-right: 1px solid var(--border-subtle);
+        }
+
+        /* Tipografia */
+        h1, h2, h3, .stMetric div {
+            font-family: 'Outfit', sans-serif !important;
+            color: var(--text-primary) !important;
+        }
+
+        /* Metrics Styling */
+        [data-testid="stMetricValue"] {
+            color: var(--accent-primary) !important;
+            font-weight: 700 !important;
+        }
+        
+        [data-testid="stMetricLabel"] {
+            color: var(--text-secondary) !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+        }
+
+        /* Cards */
+        .stMetric {
+            background: #FFFFFF !important;
+            border: 1px solid var(--border-subtle) !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+            border-radius: 12px !important;
+            padding: 20px !important;
+        }
+
+        /* Botões */
+        .stButton button {
+            background-color: var(--accent-primary) !important;
+            color: white !important;
+            border-radius: 8px !important;
+            font-weight: 600;
+            border: none !important;
+            padding: 0.5rem 1.5rem;
+            transition: opacity 0.2s;
+        }
+        /* Legibilidade de Legendas e Captions */
+        .stCaption, .stMarkdown p {
+            color: #334155 !important;
+        }
+
+        /* Forçar Header Estilo Studio */
+        header, [data-testid="stHeader"] {
+            background-color: #FFFFFF !important;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        /* Esconder Elementos Default Streamlit p/ Limpeza */
+        #MainMenu, footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -286,13 +365,27 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
 # INTERFACE DO DASHBOARD
 # =====================================================================
 
-st.title("📊 Painel Gerencial - Setor de Edição de Vídeos")
+# ---------------- HEADER PRINCIPAL ----------------
+st.markdown("""
+    <div style="background: white; padding: 24px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); display: flex; align-items: center; gap: 24px; margin-bottom: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div style="background: #8B5CF6; padding: 14px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 7l-7 5 7 5V7z"></path>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+        </div>
+        <div>
+            <h1 style="margin: 0; font-size: 2rem; font-weight: 800; color: #1E293B; font-family: 'Outfit', sans-serif;">Painel Gerencial - Setor de Edição de Vídeos</h1>
+            <p style="margin: 0; color: #334155; font-size: 1rem; font-weight: 600;">Diretoria de Operações | Monitoramento de Edição</p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
-with st.spinner("Conectando via OAuth e Processando Dados..."):
+with st.spinner("Initializing FrameControl Engine..."):
     # Como a requisição para API agora precisa do client_secret, ele abrirá o navegador na 1ª vez
     raw_ajustes, raw_folha, raw_ocorrencias, raw_ocorrencias_fora, df_ranking_editores, df_prioridades = carregar_dados()
     
-    if not raw_ocorrencias.empty:
+    if raw_ocorrencias is not None and not raw_ocorrencias.empty:
         df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df_prioridades = preparar_dados(raw_ajustes, raw_folha, raw_ocorrencias, raw_ocorrencias_fora, df_prioridades)
 
         # ---------------- FILTRO MENSAL SIDEBAR ----------------
@@ -359,7 +452,7 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
             except Exception as e:
                 st.error(f"Erro na agregação de editores: {e}")
 
-        # ---------------- KPIs PRINCIPAIS ----------------
+        # ---------------- CÁLCULO DE MÉTRICAS (FrameControl Engine) ----------------
         total_ocorrencias_gerais = len(df_ocorrencias)
         total_fora_controle = len(df_ocorrencias_fora)
         
@@ -368,11 +461,15 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
             total_videos = int(df_folha['_Producao'].sum())
         else:
             total_videos = 0
-        
+
+        # ---------------- KPIs PRINCIPAIS (Versão Estável st.metric) ----------------
         col1, col2, col3 = st.columns(3)
-        col1.metric("Videos Produzidos", f"{total_videos:,}".replace(',', '.'))
-        col2.metric("Ocorrências Totais", total_ocorrencias_gerais)
-        col3.metric("Erros Fora do Controle", total_fora_controle, delta_color="inverse")
+        with col1:
+            st.metric("Vídeos Produzidos", f"{total_videos:,}".replace(',', '.'))
+        with col2:
+            st.metric("Incidentes Totais", total_ocorrencias_gerais)
+        with col3:
+            st.metric("Erros Fora do Controle", total_fora_controle)
         
         st.divider()
 
@@ -392,8 +489,8 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
                 contagem_tipos['Percentual'] = (contagem_tipos['Quantidade'] / total_ocr) * 100
                 contagem_tipos['LabelText'] = contagem_tipos.apply(lambda row: f"{row['Quantidade']} ({row['Percentual']:.1f}%)", axis=1)
                 
-                # Lógica de cores: Cobrança de prazo é VERMELHO, Todo o resto é AZUL
-                contagem_tipos['Cor'] = contagem_tipos['Categoria'].apply(lambda x: '#e74c3c' if x == 'COBRANÇA DE PRAZO' else '#3498db')
+                # Lógica de cores FrameControl: Cobrança é STATUS-ERROR, outros são tons de ACCENT-SUBTLE/MUTED
+                contagem_tipos['Cor'] = contagem_tipos['Categoria'].apply(lambda x: '#EF4444' if x == 'COBRANÇA DE PRAZO' else '#3F3F46')
                 
                 # Para Plotly manter a ordem crescente de tamanho (barras horizontais, os maiores ficam em cima)
                 contagem_tipos = contagem_tipos.sort_values(by='Quantidade', ascending=True)
@@ -402,16 +499,27 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
                               text='LabelText')
                 
                 # Aplicando as cores diretamente nas barras
-                fig_tipos.update_traces(marker_color=contagem_tipos['Cor'], textposition='outside')
+                fig_tipos.update_traces(marker_color=contagem_tipos['Cor'], textposition='outside', marker_line_width=0)
                 
                 fig_tipos.update_layout(
-                    xaxis_title="Quantidade de Ocorrências",
+                    template="plotly_white",
+                    xaxis_title="Quantidade",
                     yaxis_title="",
                     showlegend=False,
-                    xaxis={"showgrid": True, "gridcolor": "#444"},
+                    font_family="Inter",
+                    font_color="#1E293B",
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    margin={"l": 0, "r": 0, "t": 10, "b": 10}
+                    xaxis={
+                        "showgrid": True, 
+                        "gridcolor": "#CBD5E1",
+                        "tickfont": {"color": "#1E293B", "size": 12},
+                        "title_font": {"color": "#1E293B", "size": 14, "weight": "bold"}
+                    },
+                    yaxis={
+                        "tickfont": {"color": "#1E293B", "size": 12},
+                    },
+                    margin={"l": 0, "r": 40, "t": 10, "b": 40}
                 )
                 
                 st.plotly_chart(fig_tipos, use_container_width=True)
@@ -444,15 +552,26 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
                     df_edit['LabelText'] = df_edit.apply(lambda r: f"{r['Demandas']} ({r['Percentual']:.1f}%)", axis=1)
                     
                     fig2 = px.bar(df_edit, x='Demandas', y='Editor', orientation='h', text='LabelText')
-                    fig2.update_traces(marker_color='#27ae60', textposition='outside')
+                    fig2.update_traces(marker_color='#8B5CF6', textposition='outside', marker_line_width=0)
                     fig2.update_layout(
-                        xaxis_title="Demandas Realizadas",
+                        template="plotly_white",
+                        xaxis_title="Demandas Realizadas / Pontos",
                         yaxis_title="",
                         showlegend=False,
-                        xaxis={"showgrid": True, "gridcolor": "#444"},
+                        font_family="Inter",
+                        font_color="#1E293B",
+                        xaxis={
+                            "showgrid": True, 
+                            "gridcolor": "#CBD5E1",
+                            "tickfont": {"color": "#1E293B", "size": 11},
+                            "title_font": {"color": "#1E293B", "size": 14, "weight": "bold"}
+                        },
+                        yaxis={
+                            "tickfont": {"color": "#1E293B", "size": 11}
+                        },
                         plot_bgcolor='rgba(0,0,0,0)',
                         paper_bgcolor='rgba(0,0,0,0)',
-                        margin={"l": 0, "r": 0, "t": 10, "b": 10}
+                        margin={"l": 0, "r": 50, "t": 10, "b": 40}
                     )
                     st.plotly_chart(fig2, use_container_width=True)
                 else:
@@ -481,13 +600,24 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
                 fig3 = px.bar(df_tipos_fora, x='Quantidade', y='Categoria', orientation='h', text='LabelText')
                 fig3.update_traces(marker_color='#f39c12', textposition='outside') # Laranja para diferenciar
                 fig3.update_layout(
+                    template="plotly_white",
                     xaxis_title="Quantidade",
                     yaxis_title="",
                     showlegend=False,
-                    xaxis={"showgrid": True, "gridcolor": "#444"},
+                    font_family="Inter",
+                    font_color="#1E293B",
+                    xaxis={
+                        "showgrid": True, 
+                        "gridcolor": "#CBD5E1",
+                        "tickfont": {"color": "#1E293B", "size": 12},
+                        "title_font": {"color": "#1E293B", "size": 14, "weight": "bold"}
+                    },
+                    yaxis={
+                        "tickfont": {"color": "#1E293B", "size": 12}
+                    },
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    margin={"l": 0, "r": 0, "t": 10, "b": 10}
+                    margin={"l": 0, "r": 40, "t": 10, "b": 40}
                 )
                 st.plotly_chart(fig3, use_container_width=True)
             else:
@@ -542,23 +672,33 @@ with st.spinner("Conectando via OAuth e Processando Dados..."):
 
             # Exibir Atrasados
             with st.container():
-                st.subheader("🚨 Atrasados (Ação Imediata)")
+                st.markdown("""
+                    <div style="background: #FFF1F2; border-left: 4px solid #F43F5E; padding: 1.25rem; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin:0; color: #9F1239; font-size: 1rem; font-weight: 700;">🚨 Atrasados</h4>
+                        <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #BE123C; opacity: 0.8;">Ação imediata requerida para estas demandas.</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
                 if not df_atrasados.empty:
-                    st.error(f"⚠️ **{len(df_atrasados)} demandas** estão com o prazo vencido! Cobrar agora.")
                     st.dataframe(df_atrasados[cols_avisos].sort_values('Prazo real'), use_container_width=True, hide_index=True)
                 else:
-                    st.success("✅ Nenhum atraso detectado.")
+                    st.success("Tudo em dia! Sem pendências atrasadas.")
 
-            st.write("") # Espaçador
+            st.write("") 
 
             # Exibir Na Semana
             with st.container():
-                st.subheader("📅 Entregas desta Semana")
+                st.markdown("""
+                    <div style="background: #F5F3FF; border-left: 4px solid #8B5CF6; padding: 1.25rem; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin:0; color: #5B21B6; font-size: 1rem; font-weight: 700;">📅 Entregas desta Semana</h4>
+                        <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #6D28D9; opacity: 0.8;">Acompanhamento da fila de render desta semana.</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
                 if not df_semana.empty:
-                    st.warning(f"🔔 **{len(df_semana)} demandas** vencem até domingo.")
                     st.dataframe(df_semana[cols_avisos].sort_values('Prazo real'), use_container_width=True, hide_index=True)
                 else:
-                    st.info("Nenhuma entrega prevista para o restante da semana.")
+                    st.info("Fila vazia. Nenhuma entrega prevista para este ciclo.")
         else:
             st.info("Dados de Prioridades não disponíveis para gerar avisos.")
 
