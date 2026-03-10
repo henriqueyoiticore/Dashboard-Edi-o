@@ -670,3 +670,4 @@ with st.spinner("FrameControl Engine Initializing..."):
             render_ajustes(df_ajustes_p)
     else:
         st.warning("Falha ao carregar dados. Verifique a autenticação.")
+
