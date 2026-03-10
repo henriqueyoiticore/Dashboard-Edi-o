@@ -268,7 +268,7 @@ def carregar_dados():
         
     df_folha = pd.concat(dfs_folha, ignore_index=True) if dfs_folha else pd.DataFrame()
 
-    df_ajustes = get_sheet_data(service, ID_AJUSTES, 'A:Z')
+    df_ajustes = get_sheet_data(service, ID_AJUSTES, 'A:ZZ')
     df_ocorrencias = get_sheet_data(service, ID_OCORRENCIAS_1, 'A:Z')
     df_ocorrencias_fora = get_sheet_data(service, ID_OCORRENCIAS_FORA, 'A:Z')
     # Aba com ranking consolidado (sem data - usada quando filtro = Todos)
