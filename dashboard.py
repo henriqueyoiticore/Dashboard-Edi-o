@@ -45,23 +45,48 @@ st.markdown("""
             --status-success: #10B981;
         }
 
-        /* Estrutura Base */
+        /* Forçar Fundo Branco e Texto Escuro em Tudo sem Quebrar Ícones */
         .stApp {
-            background-color: var(--surface-page);
-            color: var(--text-primary);
+            background-color: #F8FAFC !important;
+        }
+
+        .stApp, .stApp p, .stApp label, .stApp h1, .stApp h2, .stApp h3 {
+            color: #1E293B !important;
             font-family: 'Inter', sans-serif;
         }
 
-        /* Sidebar Customizada */
-        [data-testid="stSidebar"] {
-            background-color: #FFFFFF;
-            border-right: 1px solid var(--border-subtle);
+        /* Corrigir para spans e divs específicos (exceto ícones e elementos escuros) */
+        .stApp span:not([data-testid="stIcon"]), 
+        .stApp div:not([data-testid="stIcon"]) {
+             color: #1E293B !important;
         }
 
-        /* Tipografia */
-        h1, h2, h3, .stMetric div {
-            font-family: 'Outfit', sans-serif !important;
-            color: var(--text-primary) !important;
+        /* EXCEÇÃO: Botões e Elementos Escuros precisam de letra CLARA */
+        .stButton button, [data-baseweb="button"], .stButton button p,
+        div[data-baseweb="input"] input, div[data-baseweb="select"] div, div[data-baseweb="select"] span {
+            color: #FFFFFF !important;
+        }
+
+        /* Garantir que o texto dentro do input de busca seja visível */
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.6) !important;
+        }
+
+        /* Sidebar - Fundo Branco e Texto Escuro */
+        [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child {
+            background-color: #FFFFFF !important;
+            border-right: 1px solid var(--border-subtle);
+        }
+        
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, 
+        [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebarNav"] span {
+            color: #1E293B !important;
+            opacity: 1 !important;
+        }
+
+        /* Restaurar Font dos Ícones */
+        [data-testid="stIcon"] {
+            font-family: "Material Symbols Outlined", "Material Icons", sans-serif !important;
         }
 
         /* Metrics Styling */
@@ -71,14 +96,14 @@ st.markdown("""
         }
         
         [data-testid="stMetricLabel"] {
-            color: var(--text-secondary) !important;
+            color: #475569 !important;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-size: 0.75rem !important;
             font-weight: 600 !important;
         }
 
-        /* Cards */
+        /* Cards e Containers */
         .stMetric {
             background: #FFFFFF !important;
             border: 1px solid var(--border-subtle) !important;
@@ -87,25 +112,9 @@ st.markdown("""
             padding: 20px !important;
         }
 
-        /* Botões */
-        .stButton button {
-            background-color: var(--accent-primary) !important;
-            color: white !important;
-            border-radius: 8px !important;
-            font-weight: 600;
-            border: none !important;
-            padding: 0.5rem 1.5rem;
-            transition: opacity 0.2s;
-        }
-        /* Legibilidade de Legendas e Captions */
-        .stCaption, .stMarkdown p {
-            color: #334155 !important;
-        }
-
-        /* Forçar Header Estilo Studio */
-        header, [data-testid="stHeader"] {
-            background-color: #FFFFFF !important;
-            border-bottom: 1px solid var(--border-subtle);
+        /* Corrigir inputs (Selectbox) para texto escuro */
+        [data-baseweb="select"] div {
+            color: #1E293B !important;
         }
 
         /* Esconder Elementos Default Streamlit p/ Limpeza */
@@ -201,7 +210,7 @@ def get_sheet_data(service, spreadsheet_id, range_name, silent=False):
             st.error(f"Erro ao ler a planilha ID {spreadsheet_id}: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=120)
 def carregar_dados():
     service = get_google_sheets_service()
 
@@ -290,6 +299,11 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
             # 3. Fallback pandas
             return pd.to_datetime(s, errors='coerce', dayfirst=True)
 
+        # Processar Ajustes (Tickets)
+        col_data_aj = find_date_col(df_ajustes)
+        df_ajustes['DataSort'] = df_ajustes[col_data_aj].apply(robust_date_parse)
+        df_ajustes = df_ajustes.sort_values('DataSort', ascending=False)
+
         # Processar Ocorrências
         col_data = find_date_col(df_ocorrencias)
         df_ocorrencias['Data'] = df_ocorrencias[col_data].apply(robust_date_parse)
@@ -365,342 +379,294 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
 # INTERFACE DO DASHBOARD
 # =====================================================================
 
-# ---------------- HEADER PRINCIPAL ----------------
-st.markdown("""
-    <div style="background: white; padding: 24px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); display: flex; align-items: center; gap: 24px; margin-bottom: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-        <div style="background: #8B5CF6; padding: 14px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 7l-7 5 7 5V7z"></path>
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-            </svg>
-        </div>
-        <div>
-            <h1 style="margin: 0; font-size: 2rem; font-weight: 800; color: #1E293B; font-family: 'Outfit', sans-serif;">Painel Gerencial - Setor de Edição de Vídeos</h1>
-            <p style="margin: 0; color: #334155; font-size: 1rem; font-weight: 600;">Diretoria de Operações | Monitoramento de Edição</p>
-        </div>
+def render_header(titulo, subtitulo):
+    st.markdown(f"""
+<div style="background-color: white; padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-subtle); margin-bottom: 2rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); display: flex; align-items: center; gap: 1.5rem;">
+    <div style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.3);">
+        <svg viewBox="0 0 24 24" width="32" height="32" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
     </div>
+    <div>
+        <h1 style="margin: 0; font-size: 1.75rem; color: #1E293B; letter-spacing: -0.025em; font-weight: 800;">{titulo}</h1>
+        <p style="margin: 0; color: #64748B; font-size: 0.875rem; font-weight: 500;">{subtitulo}</p>
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
-with st.spinner("Initializing FrameControl Engine..."):
-    # Como a requisição para API agora precisa do client_secret, ele abrirá o navegador na 1ª vez
+def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridades, df_ranking_editores, filtro_label, map_filtro):
+    render_header("Painel Gerencial - Setor de Edição de Vídeos", "Diretoria de Operações | Monitoramento de Edição")
+    
+    # ---------------- FILTRO MENSAL SIDEBAR ----------------
+    if filtro_label != "Todos":
+        filtro_mes = map_filtro[filtro_label]
+        if not df_ocorrencias.empty and 'Mes_Ano' in df_ocorrencias.columns:
+            df_ocorrencias = df_ocorrencias[df_ocorrencias['Mes_Ano'] == filtro_mes]
+        if not df_ocorrencias_fora.empty and 'Mes_Ano' in df_ocorrencias_fora.columns:
+            df_ocorrencias_fora = df_ocorrencias_fora[df_ocorrencias_fora['Mes_Ano'] == filtro_mes]
+        if not df_folha.empty and 'Mes_Ano' in df_folha.columns:
+            df_folha = df_folha[df_folha['Mes_Ano'] == filtro_mes]
+        if not df_prioridades.empty and '_Mes_Ano' in df_prioridades.columns:
+            df_prioridades = df_prioridades[df_prioridades['_Mes_Ano'] == filtro_mes]
+
+    # ---------------- PREPARAÇÃO DO RANKING DE EDITORES ----------------
+    df_ranking_edit_local = pd.DataFrame(columns=['Editor', 'Demandas'])
+    if not df_prioridades.empty:
+        try:
+            col_ed = next((c for c in df_prioridades.columns if 'editor' in c.lower()), None)
+            if col_ed:
+                col_pt = next((c for c in df_prioridades.columns if 'ponto' in c.lower() or 'quantidade' in c.lower()), None)
+                if col_pt:
+                    df_prioridades['_P'] = pd.to_numeric(df_prioridades[col_pt], errors='coerce').fillna(0)
+                    df_res = df_prioridades.groupby(col_ed)['_P'].sum().reset_index()
+                else:
+                    df_res = df_prioridades.groupby(col_ed).size().reset_index()
+                df_res.columns = ['Editor', 'Demandas']
+                df_ranking_edit_local = df_res
+        except Exception as e:
+            st.error(f"Erro na agregação de editores: {e}")
+
+    # ---------------- CÁLCULO DE MÉTRICAS ----------------
+    total_ocorrencias_gerais = len(df_ocorrencias)
+    total_fora_controle = len(df_ocorrencias_fora)
+    total_videos = int(df_folha['_Producao'].sum()) if not df_folha.empty and '_Producao' in df_folha.columns else 0
+
+    col1, col2, col3 = st.columns(3)
+    with col1: st.metric("Vídeos Produzidos", f"{total_videos:,}".replace(',', '.'))
+    with col2: st.metric("Incidentes Totais", total_ocorrencias_gerais)
+    with col3: st.metric("Erros Fora do Controle", total_fora_controle)
+    
+    st.divider()
+
+    # ---------------- GRAFICOS ----------------
+    col_graf_1, col_graf_2 = st.columns([1, 1])
+    with col_graf_1:
+        st.subheader("📊 Distribuição por Tipo de Ocorrência")
+        if 'Tipo_Ocorrência' in df_ocorrencias.columns and not df_ocorrencias.empty:
+            contagem_tipos = df_ocorrencias['Tipo_Ocorrência'].value_counts().reset_index()
+            contagem_tipos.columns = ['Categoria', 'Quantidade']
+            total_ocr = contagem_tipos['Quantidade'].sum()
+            contagem_tipos['Percentual'] = (contagem_tipos['Quantidade'] / total_ocr) * 100
+            contagem_tipos['LabelText'] = contagem_tipos.apply(lambda row: f"{row['Quantidade']} ({row['Percentual']:.1f}%)", axis=1)
+            contagem_tipos['Cor'] = contagem_tipos['Categoria'].apply(lambda x: '#EF4444' if x == 'COBRANÇA DE PRAZO' else '#3F3F46')
+            contagem_tipos = contagem_tipos.sort_values(by='Quantidade', ascending=True)
+
+            fig_tipos = px.bar(contagem_tipos, x='Quantidade', y='Categoria', orientation='h', text='LabelText')
+            fig_tipos.update_traces(marker_color=contagem_tipos['Cor'], textposition='outside', marker_line_width=0)
+            fig_tipos.update_layout(
+                template="plotly_white", 
+                xaxis_title="Quantidade", 
+                yaxis_title="", 
+                showlegend=False, 
+                font={"color": "#1E293B", "family": "Inter", "size": 12},
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                margin={"l": 0, "r": 40, "t": 10, "b": 40},
+                xaxis={"tickfont": {"color": "#1E293B", "weight": "bold"}, "title_font": {"color": "#1E293B", "weight": "bold"}},
+                yaxis={"tickfont": {"color": "#1E293B", "weight": "bold"}}
+            )
+            st.plotly_chart(fig_tipos, use_container_width=True)
+        else: st.info("Sem dados de ocorrência.")
+
+    with col_graf_2:
+        st.subheader("🚀 Produção por Editor (Demandas)")
+        if not df_ranking_edit_local.empty:
+            df_edit = df_ranking_edit_local.copy()
+            EDITORES_DEMITIDOS = ['adão', 'adao', 'letícia', 'leticia', 'thiago santos']
+            df_edit = df_edit[~df_edit['Editor'].str.lower().str.strip().isin(EDITORES_DEMITIDOS)]
+            df_edit = df_edit[df_edit['Demandas'] > 0].sort_values('Demandas', ascending=True)
+            if not df_edit.empty:
+                total_demandas = df_edit['Demandas'].sum()
+                df_edit['Percentual'] = (df_edit['Demandas'] / total_demandas * 100).round(1)
+                df_edit['LabelText'] = df_edit.apply(lambda r: f"{r['Demandas']} ({r['Percentual']:.1f}%)", axis=1)
+                fig2 = px.bar(df_edit, x='Demandas', y='Editor', orientation='h', text='LabelText')
+                fig2.update_traces(marker_color='#8B5CF6', textposition='outside', marker_line_width=0)
+                fig2.update_layout(
+                    template="plotly_white", 
+                    xaxis_title="Demandas/Pontos", 
+                    yaxis_title="", 
+                    showlegend=False, 
+                    font={"color": "#1E293B", "family": "Inter", "size": 12},
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    margin={"l": 0, "r": 50, "t": 10, "b": 40},
+                    xaxis={"tickfont": {"color": "#1E293B", "weight": "bold"}, "title_font": {"color": "#1E293B", "weight": "bold"}},
+                    yaxis={"tickfont": {"color": "#1E293B", "weight": "bold"}}
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+            else: st.info("Nenhuma demanda encontrada.")
+        else: st.info("Dados de editores não encontrados.")
+
+    st.divider()
+    
+    # ---------------- ERROS FORA ----------------
+    col_fora_1, col_fora_2 = st.columns([1, 1])
+    with col_fora_1:
+        st.subheader("🚨 Erros Fora da Edição (Tipos)")
+        if 'Tipo_Ocorrência' in df_ocorrencias_fora.columns and not df_ocorrencias_fora.empty:
+            df_tipos_fora = df_ocorrencias_fora['Tipo_Ocorrência'].value_counts().reset_index()
+            df_tipos_fora.columns = ['Categoria', 'Quantidade']
+            df_tipos_fora['LabelText'] = df_tipos_fora['Quantidade'].astype(str)
+            df_tipos_fora = df_tipos_fora.sort_values('Quantidade', ascending=True)
+            fig3 = px.bar(df_tipos_fora, x='Quantidade', y='Categoria', orientation='h', text='LabelText')
+            fig3.update_traces(marker_color='#f39c12', textposition='outside')
+            fig3.update_layout(
+                template="plotly_white", 
+                xaxis_title="Quantidade", 
+                yaxis_title="", 
+                showlegend=False, 
+                font={"color": "#1E293B", "family": "Inter", "size": 12},
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                xaxis={"tickfont": {"color": "#1E293B", "weight": "bold"}, "title_font": {"color": "#1E293B", "weight": "bold"}},
+                yaxis={"tickfont": {"color": "#1E293B", "weight": "bold"}},
+                margin={"l": 0, "r": 40, "t": 10, "b": 40}
+            )
+            st.plotly_chart(fig3, use_container_width=True)
+        else: st.info("Sem ocorrências externas.")
+
+    with col_fora_2:
+        st.subheader("📋 Lista de Incidentes Externos")
+        if not df_ocorrencias_fora.empty:
+            busca_cliente = st.text_input("🔍 Buscar por Cliente", key="search_ext")
+            df_f_fora = df_ocorrencias_fora.copy()
+            if busca_cliente:
+                col_c = next((c for c in df_f_fora.columns if 'cliente' in c.lower()), None)
+                if col_c: df_f_fora = df_f_fora[df_f_fora[col_c].astype(str).str.contains(busca_cliente, case=False, na=False)]
+            cols_v = [c for c in df_f_fora.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
+            st.dataframe(df_f_fora[cols_v], use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ---------------- CENTRAL DE AVISOS ----------------
+    st.header("🔔 Central de Avisos - Gestão de Prazos")
+    df_raw = st.session_state.get('df_prioridades_raw', pd.DataFrame())
+    if not df_raw.empty:
+        hoje = pd.Timestamp.now().normalize()
+        v_atrasados = df_raw[(df_raw['_Data'] < hoje) & (df_raw['Entregue'].str.lower() != 'entregou')]
+        v_semana = df_raw[(df_raw['_Data'] >= hoje) & (df_raw['_Data'] <= hoje + pd.Timedelta(days=(6 - hoje.weekday()))) & (df_raw['Entregue'].str.lower() != 'entregou')]
+        
+        c_v = ['Nome', 'Editor', 'Prazo real', 'Entregue']
+        st.markdown('<div style="color:#9F1239; font-weight:700;">🚨 Atrasados</div>', unsafe_allow_html=True)
+        if not v_atrasados.empty: st.dataframe(v_atrasados[c_v], use_container_width=True, hide_index=True)
+        else: st.success("Tudo em dia!")
+        
+        st.markdown('<div style="color:#5B21B6; font-weight:700; margin-top:20px;">📅 Entregas desta Semana</div>', unsafe_allow_html=True)
+        if not v_semana.empty: st.dataframe(v_semana[c_v], use_container_width=True, hide_index=True)
+        else: st.info("Fila vazia para esta semana.")
+
+def render_ajustes(df_ajustes):
+    render_header("Ajustes de Edição", "Gestão de Tickets | Solicitações de Clientes")
+    
+    if df_ajustes.empty:
+        st.info("Nenhuma solicitação de ajuste encontrada na planilha.")
+        return
+
+    # Campo de Busca
+    busca = st.text_input("🔍 Buscar por Cliente", placeholder="Digite o nome do cliente...", key="search_ajustes")
+    
+    # Processar dados para exibição em cards
+    # Normalizar nomes de colunas (remover espaços extras e lidar com acentos)
+    df_ajustes.columns = [c.strip() for c in df_ajustes.columns]
+    
+    col_nome = next((c for c in df_ajustes.columns if 'nome e sobrenome' in c.lower()), 'Seu nome e sobrenome')
+    col_data = next((c for c in df_ajustes.columns if 'carimbo' in c.lower()), 'Carimbo de data/hora')
+    # Detectar colunas de vídeo (lidando com Vídeo, Video, vdeo, etc)
+    cols_videos = [c for c in df_ajustes.columns if 'deo' in c.lower()]
+
+    df_display = df_ajustes.copy()
+    if busca:
+        df_display = df_display[df_display[col_nome].astype(str).str.contains(busca, case=False, na=False)]
+
+    if df_display.empty:
+        st.warning("Nenhum ajuste encontrado para os termos buscados.")
+        return
+
+    # Layout de Grid para Tickets
+    cols_per_row = 3
+    rows = [df_display.iloc[i:i+cols_per_row] for i in range(0, len(df_display), cols_per_row)]
+
+    for row_df in rows:
+        streamlit_cols = st.columns(cols_per_row)
+        for idx, (_, ticket) in enumerate(row_df.iterrows()):
+            with streamlit_cols[idx]:
+                # Identifier único para o checkbox no session_state
+                ticket_id = f"demanda_{ticket[col_nome]}_{ticket[col_data]}"
+                
+                # Container do Card com Borda e Checkbox
+                demanded = st.checkbox("Demandado", key=ticket_id)
+                
+                # Filtrar ajustes para exibir no card (respeitando a regra de ignorar "OK" e vazios)
+                lista_ajustes = []
+                for c in cols_videos:
+                    val = str(ticket[c]).strip()
+                    val_lower = val.lower()
+                    # Ignorar respostas padrão que não indicam ajuste real
+                    ignorados = ["", "ok", "não tinha vídeo", "nenhum", "nada", "-", "não tem video", "nao tem video", "nda", "não tem", "nao tem"]
+                    if val_lower not in ignorados:
+                        # Extrair um label amigável (ex: Vídeo 1)
+                        # Remove prefixos longos e normaliza o nome
+                        label = c.replace('Selecione o vdeo para ajuste ', '').replace(' (Vdeo ', ' (Video ').split(' (')[0]
+                        lista_ajustes.append(f"<li><strong>{label}:</strong> {val}</li>")
+                
+                # Se a lista estiver vazia após o filtro, mostra todos os campos não vazios como fallback
+                if not lista_ajustes:
+                    lista_ajustes = [f"<li>{str(ticket[c])}</li>" for c in cols_videos if str(ticket[c]).strip() != ""]
+
+                bg_color = "#F0FDF4" if demanded else "white"
+                border_color = "#10B981" if demanded else "rgba(0,0,0,0.1)"
+                
+                st.markdown(f"""<div style="background: {bg_color}; padding: 20px; border-radius: 12px; border: 1px solid {border_color}; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); min-height: 250px;">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+<span style="font-size: 0.75rem; color: #64748B; font-weight: 600;">{ticket[col_data]}</span>
+{f'<span style="background: #10B981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800;">DEMANDADO</span>' if demanded else ''}
+</div>
+<h3 style="margin: 0 0 12px 0; font-size: 1.1rem; color: #1E293B; font-weight: 700;">{ticket[col_nome]}</h3>
+<div style="font-size: 0.85rem; color: #334155;">
+<strong style="color: #1E293B;">Ajustes solicitados:</strong>
+<ul style="margin: 8px 0; padding-left: 20px; color: #334155;">
+{"".join(lista_ajustes) if lista_ajustes else "<li>Solicitação sem detalhamento de vídeo.</li>"}
+</ul>
+</div>
+</div>""", unsafe_allow_html=True)
+
+# Main Application Logic
+with st.spinner("FrameControl Engine Initializing..."):
     raw_ajustes, raw_folha, raw_ocorrencias, raw_ocorrencias_fora, df_ranking_editores, df_prioridades = carregar_dados()
     
-    if raw_ocorrencias is not None and not raw_ocorrencias.empty:
-        df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df_prioridades = preparar_dados(raw_ajustes, raw_folha, raw_ocorrencias, raw_ocorrencias_fora, df_prioridades)
-
-        # ---------------- FILTRO MENSAL SIDEBAR ----------------
-        # Coletar todas as datas de todas as fontes para garantir que o filtro tenha tudo
-        todas_datas = []
-        for df, col in [(df_ocorrencias, 'Data'), (df_ocorrencias_fora, 'Data'), (df_folha, 'Data'), (df_prioridades, '_Data')]:
-            if df is not None and not df.empty and col in df.columns:
-                todas_datas.extend(df[col].dropna().unique())
+    if raw_ocorrencias is not None:
+        df_ajustes_p, df_folha_p, df_ocorrencias_p, df_ocorrencias_fora_p, df_prioridades_p = preparar_dados(raw_ajustes, raw_folha, raw_ocorrencias, raw_ocorrencias_fora, df_prioridades)
         
-        if not todas_datas:
-             st.sidebar.warning("Nenhuma data válida encontrada para filtrar.")
-             filtro_label = "Todos"
-        else:
-            df_datas_all = pd.DataFrame({'Data': todas_datas})
-            df_datas_all['Data_Base'] = df_datas_all['Data'].dt.to_period('M').dt.to_timestamp()
+        st.session_state['df_prioridades_raw'] = df_prioridades_p
+        
+        # Sidebar Navigation
+        st.sidebar.title("FrameControl")
+        page = st.sidebar.radio("Navegação", ["Dashboard Principal", "Ajustes (Tickets)"])
+        st.sidebar.divider()
+        
+        # Filtros Globais (apenas para Dashboard)
+        if page == "Dashboard Principal":
+            todas_datas = []
+            for df, col in [(df_ocorrencias_p, 'Data'), (df_ocorrencias_fora_p, 'Data'), (df_folha_p, 'Data'), (df_prioridades_p, '_Data')]:
+                if df is not None and not df.empty and col in df.columns: todas_datas.extend(df[col].dropna().unique())
             
-            meses_pt = {
-                1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
-                7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
-            }
-            
-            datas_ordenadas = sorted(df_datas_all['Data_Base'].unique())
-            meses_formatados = [f"{meses_pt[d.month]}/{d.year}" for d in datas_ordenadas]
-            map_filtro = {f"{meses_pt[d.month]}/{d.year}": d.strftime('%m/%Y') for d in datas_ordenadas}
+            if todas_datas:
+                df_datas_all = pd.DataFrame({'Data': todas_datas})
+                df_datas_all['Data_Base'] = df_datas_all['Data'].dt.to_period('M').dt.to_timestamp()
+                meses_pt = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+                datas_ordenadas = sorted(df_datas_all['Data_Base'].unique())
+                meses_formatados = [f"{meses_pt[d.month]}/{d.year}" for d in datas_ordenadas]
+                map_filtro = {f"{meses_pt[d.month]}/{d.year}": d.strftime('%m/%Y') for d in datas_ordenadas}
+                filtro_label = st.sidebar.selectbox("Filtro Mensal", ["Todos"] + meses_formatados)
+            else:
+                filtro_label = "Todos"
+                map_filtro = {}
 
-            st.sidebar.header("Filtros Visuais")
-            filtro_label = st.sidebar.selectbox("Selecione o Mês:", ["Todos"] + meses_formatados)
-            
-            st.sidebar.divider()
             if st.sidebar.button("🔄 Atualizar Dados"):
                 st.cache_data.clear()
                 st.rerun()
-
-        # Criar cópia bruta para a Central de Avisos (Não afetada pelos filtros de mês)
-        df_prioridades_raw = df_prioridades.copy() if not df_prioridades.empty else pd.DataFrame()
-
-        if filtro_label != "Todos":
-            filtro_mes = map_filtro[filtro_label]
-            if not df_ocorrencias.empty and 'Mes_Ano' in df_ocorrencias.columns:
-                df_ocorrencias = df_ocorrencias[df_ocorrencias['Mes_Ano'] == filtro_mes]
-            if not df_ocorrencias_fora.empty and 'Mes_Ano' in df_ocorrencias_fora.columns:
-                df_ocorrencias_fora = df_ocorrencias_fora[df_ocorrencias_fora['Mes_Ano'] == filtro_mes]
-            if not df_folha.empty and 'Mes_Ano' in df_folha.columns:
-                df_folha = df_folha[df_folha['Mes_Ano'] == filtro_mes]
-            if not df_prioridades.empty and '_Mes_Ano' in df_prioridades.columns:
-                df_prioridades = df_prioridades[df_prioridades['_Mes_Ano'] == filtro_mes]
-
-        # ---------------- PREPARAÇÃO DO RANKING DE EDITORES (Sempre via Prioridades) ----------------
-        df_ranking_editores = pd.DataFrame(columns=['Editor', 'Demandas'])
-        if not df_prioridades.empty:
-            try:
-                col_ed = next((c for c in df_prioridades.columns if 'editor' in c.lower()), None)
-                if col_ed:
-                    col_pt = next((c for c in df_prioridades.columns if 'ponto' in c.lower() or 'quantidade' in c.lower()), None)
-                    
-                    if col_pt:
-                        df_prioridades['_P'] = pd.to_numeric(df_prioridades[col_pt], errors='coerce').fillna(0)
-                        df_res = df_prioridades.groupby(col_ed)['_P'].sum().reset_index()
-                    else:
-                        df_res = df_prioridades.groupby(col_ed).size().reset_index()
-                    
-                    df_res.columns = ['Editor', 'Demandas']
-                    df_ranking_editores = df_res
-            except Exception as e:
-                st.error(f"Erro na agregação de editores: {e}")
-
-        # ---------------- CÁLCULO DE MÉTRICAS (FrameControl Engine) ----------------
-        total_ocorrencias_gerais = len(df_ocorrencias)
-        total_fora_controle = len(df_ocorrencias_fora)
-        
-        # SOMA REAL DE VÍDEOS (Folha de Pagamento)
-        if not df_folha.empty and '_Producao' in df_folha.columns:
-            total_videos = int(df_folha['_Producao'].sum())
-        else:
-            total_videos = 0
-
-        # ---------------- KPIs PRINCIPAIS (Versão Estável st.metric) ----------------
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Vídeos Produzidos", f"{total_videos:,}".replace(',', '.'))
-        with col2:
-            st.metric("Incidentes Totais", total_ocorrencias_gerais)
-        with col3:
-            st.metric("Erros Fora do Controle", total_fora_controle)
-        
-        st.divider()
-
-        # ---------------- SEÇÃO 2: TIPOS DE OCORRÊNCIA E PRODUÇÃO ----------------
-        col_graf_1, col_graf_2 = st.columns([1, 1])
-
-        with col_graf_1:
-            st.subheader("📊 Distribuição por Tipo de Ocorrência")
-            st.caption("Foco principal dos problemas do setor.")
+                
+            render_dashboard(df_ocorrencias_p, df_ocorrencias_fora_p, df_folha_p, df_prioridades_p, df_ranking_editores, filtro_label, map_filtro)
             
-            if 'Tipo_Ocorrência' in df_ocorrencias.columns:
-                contagem_tipos = df_ocorrencias['Tipo_Ocorrência'].value_counts().reset_index()
-                contagem_tipos.columns = ['Categoria', 'Quantidade']
-                total_ocr = contagem_tipos['Quantidade'].sum()
-                
-                # Criando as labels customizadas com Porcentagem
-                contagem_tipos['Percentual'] = (contagem_tipos['Quantidade'] / total_ocr) * 100
-                contagem_tipos['LabelText'] = contagem_tipos.apply(lambda row: f"{row['Quantidade']} ({row['Percentual']:.1f}%)", axis=1)
-                
-                # Lógica de cores FrameControl: Cobrança é STATUS-ERROR, outros são tons de ACCENT-SUBTLE/MUTED
-                contagem_tipos['Cor'] = contagem_tipos['Categoria'].apply(lambda x: '#EF4444' if x == 'COBRANÇA DE PRAZO' else '#3F3F46')
-                
-                # Para Plotly manter a ordem crescente de tamanho (barras horizontais, os maiores ficam em cima)
-                contagem_tipos = contagem_tipos.sort_values(by='Quantidade', ascending=True)
-
-                fig_tipos = px.bar(contagem_tipos, x='Quantidade', y='Categoria', orientation='h',
-                              text='LabelText')
-                
-                # Aplicando as cores diretamente nas barras
-                fig_tipos.update_traces(marker_color=contagem_tipos['Cor'], textposition='outside', marker_line_width=0)
-                
-                fig_tipos.update_layout(
-                    template="plotly_white",
-                    xaxis_title="Quantidade",
-                    yaxis_title="",
-                    showlegend=False,
-                    font_family="Inter",
-                    font_color="#1E293B",
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    xaxis={
-                        "showgrid": True, 
-                        "gridcolor": "#CBD5E1",
-                        "tickfont": {"color": "#1E293B", "size": 12},
-                        "title_font": {"color": "#1E293B", "size": 14, "weight": "bold"}
-                    },
-                    yaxis={
-                        "tickfont": {"color": "#1E293B", "size": 12},
-                    },
-                    margin={"l": 0, "r": 40, "t": 10, "b": 40}
-                )
-                
-                st.plotly_chart(fig_tipos, use_container_width=True)
-                
-                # Renderiza também a tabela crua resumida em um extensor se quiserem ver os números exatos
-                with st.expander("Ver Tabela Detalhada das Categorias"):
-                    tabela_resumo = contagem_tipos.sort_values(by='Quantidade', ascending=False)[['Categoria', 'Quantidade', 'Percentual']]
-                    tabela_resumo['Percentual'] = tabela_resumo['Percentual'].apply(lambda x: f"{x:.1f}%")
-                    st.dataframe(tabela_resumo, use_container_width=True, hide_index=True)
-
-            else:
-                 st.info("Dado não encontrado para gerar o gráfico.")
-
-        with col_graf_2:
-            st.subheader("🚀 Produção por Editor (Demandas)")
-            st.caption("Baseado na aba 'Prioridades' (Dados Reais Filtráveis)")
-            
-            if not df_ranking_editores.empty:
-                df_edit = df_ranking_editores.copy()
-                
-                # Excluir editores que já saíram
-                EDITORES_DEMITIDOS = ['adão', 'adao', 'letícia', 'leticia', 'thiago santos']
-                df_edit = df_edit[~df_edit['Editor'].str.lower().str.strip().isin(EDITORES_DEMITIDOS)]
-                
-                df_edit = df_edit[df_edit['Demandas'] > 0].sort_values('Demandas', ascending=True)
-                
-                total_demandas = df_edit['Demandas'].sum()
-                if total_demandas > 0:
-                    df_edit['Percentual'] = (df_edit['Demandas'] / total_demandas * 100).round(1)
-                    df_edit['LabelText'] = df_edit.apply(lambda r: f"{r['Demandas']} ({r['Percentual']:.1f}%)", axis=1)
-                    
-                    fig2 = px.bar(df_edit, x='Demandas', y='Editor', orientation='h', text='LabelText')
-                    fig2.update_traces(marker_color='#8B5CF6', textposition='outside', marker_line_width=0)
-                    fig2.update_layout(
-                        template="plotly_white",
-                        xaxis_title="Demandas Realizadas / Pontos",
-                        yaxis_title="",
-                        showlegend=False,
-                        font_family="Inter",
-                        font_color="#1E293B",
-                        xaxis={
-                            "showgrid": True, 
-                            "gridcolor": "#CBD5E1",
-                            "tickfont": {"color": "#1E293B", "size": 11},
-                            "title_font": {"color": "#1E293B", "size": 14, "weight": "bold"}
-                        },
-                        yaxis={
-                            "tickfont": {"color": "#1E293B", "size": 11}
-                        },
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        margin={"l": 0, "r": 50, "t": 10, "b": 40}
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
-                else:
-                    st.info("Nenhuma demanda encontrada para este período.")
-            else:
-                st.info("Dados de editores não encontrados na aba Prioridades.")
-                
-        st.divider()
-        
-        # ---------------- SEÇÃO 3: OCORRÊNCIAS FORA DE CONTROLE (CRÍTICAS) ----------------
-        col_fora_1, col_fora_2 = st.columns([1, 1])
-        
-        with col_fora_1:
-            st.subheader("🚨 Erros Fora da Edição (Tipos)")
-            st.caption("Problemas que impactam a edição mas vêm de fora (CS/Mento/Gravação).")
-            
-            if 'Tipo_Ocorrência' in df_ocorrencias_fora.columns and not df_ocorrencias_fora.empty:
-                df_tipos_fora = df_ocorrencias_fora['Tipo_Ocorrência'].value_counts().reset_index()
-                df_tipos_fora.columns = ['Categoria', 'Quantidade']
-                total_f = df_tipos_fora['Quantidade'].sum()
-                
-                df_tipos_fora['Percentual'] = (df_tipos_fora['Quantidade'] / total_f * 100)
-                df_tipos_fora['LabelText'] = df_tipos_fora.apply(lambda r: f"{r['Quantidade']} ({r['Percentual']:.1f}%)", axis=1)
-                df_tipos_fora = df_tipos_fora.sort_values('Quantidade', ascending=True)
-                
-                fig3 = px.bar(df_tipos_fora, x='Quantidade', y='Categoria', orientation='h', text='LabelText')
-                fig3.update_traces(marker_color='#f39c12', textposition='outside') # Laranja para diferenciar
-                fig3.update_layout(
-                    template="plotly_white",
-                    xaxis_title="Quantidade",
-                    yaxis_title="",
-                    showlegend=False,
-                    font_family="Inter",
-                    font_color="#1E293B",
-                    xaxis={
-                        "showgrid": True, 
-                        "gridcolor": "#CBD5E1",
-                        "tickfont": {"color": "#1E293B", "size": 12},
-                        "title_font": {"color": "#1E293B", "size": 14, "weight": "bold"}
-                    },
-                    yaxis={
-                        "tickfont": {"color": "#1E293B", "size": 12}
-                    },
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    margin={"l": 0, "r": 40, "t": 10, "b": 40}
-                )
-                st.plotly_chart(fig3, use_container_width=True)
-            else:
-                st.info("Nenhuma ocorrência externa registrada neste período.")
-
-        with col_fora_2:
-            st.subheader("📋 Lista de Incidentes Externos")
-            st.caption("Últimos registros da planilha do gerente.")
-            
-            if not df_ocorrencias_fora.empty:
-                # Sistema de busca por Cliente
-                busca_cliente = st.text_input("🔍 Buscar por Cliente", placeholder="Digite o nome do cliente...")
-                
-                df_filtrado_fora = df_ocorrencias_fora.copy()
-                if busca_cliente:
-                    # Tentar encontrar a coluna de cliente
-                    col_cliente = next((c for c in df_ocorrencias_fora.columns if 'cliente' in c.lower()), None)
-                    if col_cliente:
-                        df_filtrado_fora = df_filtrado_fora[df_filtrado_fora[col_cliente].astype(str).str.contains(busca_cliente, case=False, na=False)]
-                
-                # Mostrar as colunas mais relevantes
-                cols_view = [c for c in df_filtrado_fora.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
-                st.dataframe(df_filtrado_fora[cols_view], use_container_width=True, hide_index=True)
-            else:
-                st.info("Sem dados detalhados.")
-        
-        st.divider()
-
-        # ---------------- SEÇÃO 4: CENTRAL DE AVISOS (ALERTAS CRÍTICOS - FIXO) ----------------
-        st.header("🔔 Central de Avisos - Gestão de Prazos")
-        
-        if not df_prioridades_raw.empty:
-            hoje = pd.Timestamp.now().normalize()
-            fim_semana = hoje + pd.Timedelta(days=(6 - hoje.weekday()))
-            
-            # 1. ATRASADOS (Prazo real < hoje E não entregue) - USANDO DADOS BRUTOS (FIXO)
-            mask_atrasados = (
-                (df_prioridades_raw['_Data'] < hoje) & 
-                (df_prioridades_raw['Entregue'].str.lower() != 'entregou')
-            )
-            df_atrasados = df_prioridades_raw[mask_atrasados].copy()
-            
-            # 2. NA SEMANA (hoje <= Prazo real <= domingo E não entregue) - USANDO DADOS BRUTOS (FIXO)
-            mask_semana = (
-                (df_prioridades_raw['_Data'] >= hoje) & 
-                (df_prioridades_raw['_Data'] <= fim_semana) &
-                (df_prioridades_raw['Entregue'].str.lower() != 'entregou')
-            )
-            df_semana = df_prioridades_raw[mask_semana].copy()
-            
-            cols_avisos = ['Nome', 'Editor', 'Prazo real', 'Entregue', 'Bloco']
-
-            # Exibir Atrasados
-            with st.container():
-                st.markdown("""
-                    <div style="background: #FFF1F2; border-left: 4px solid #F43F5E; padding: 1.25rem; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="margin:0; color: #9F1239; font-size: 1rem; font-weight: 700;">🚨 Atrasados</h4>
-                        <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #BE123C; opacity: 0.8;">Ação imediata requerida para estas demandas.</p>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                if not df_atrasados.empty:
-                    st.dataframe(df_atrasados[cols_avisos].sort_values('Prazo real'), use_container_width=True, hide_index=True)
-                else:
-                    st.success("Tudo em dia! Sem pendências atrasadas.")
-
-            st.write("") 
-
-            # Exibir Na Semana
-            with st.container():
-                st.markdown("""
-                    <div style="background: #F5F3FF; border-left: 4px solid #8B5CF6; padding: 1.25rem; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="margin:0; color: #5B21B6; font-size: 1rem; font-weight: 700;">📅 Entregas desta Semana</h4>
-                        <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #6D28D9; opacity: 0.8;">Acompanhamento da fila de render desta semana.</p>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                if not df_semana.empty:
-                    st.dataframe(df_semana[cols_avisos].sort_values('Prazo real'), use_container_width=True, hide_index=True)
-                else:
-                    st.info("Fila vazia. Nenhuma entrega prevista para este ciclo.")
-        else:
-            st.info("Dados de Prioridades não disponíveis para gerar avisos.")
-
+        elif page == "Ajustes (Tickets)":
+            render_ajustes(df_ajustes_p)
     else:
-        st.warning("Aguardando carregamento de dados / Falha na autenticação.")
+        st.warning("Falha ao carregar dados. Verifique a autenticação.")
