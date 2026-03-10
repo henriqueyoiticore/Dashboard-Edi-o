@@ -61,9 +61,14 @@ st.markdown("""
              color: #1E293B !important;
         }
 
-        /* EXCEÇÃO: Botões e Elementos Escuros precisam de letra CLARA */
-        .stButton button, [data-baseweb="button"], .stButton button p,
-        div[data-baseweb="input"] input, div[data-baseweb="select"] div, div[data-baseweb="select"] span {
+        /* EXCEÇÃO: Botões precisam de letra CLARA, mas Selectbox precisa de letra ESCURA */
+        .stButton button, [data-baseweb="button"], .stButton button p {
+            color: #FFFFFF !important;
+        }
+        /* EXCEÇÃO: Selectbox e Inputs com fundo escuro precisam de texto BRANCO */
+        .stApp div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+        .stApp div[data-testid="stSelectbox"] div[data-baseweb="select"] div,
+        .stApp div[data-baseweb="input"] input {
             color: #FFFFFF !important;
         }
 
@@ -112,9 +117,9 @@ st.markdown("""
             padding: 20px !important;
         }
 
-        /* Corrigir inputs (Selectbox) para texto escuro */
+        /* Corrigir inputs (Selectbox) para texto claro (fundo escuro) */
         [data-baseweb="select"] div {
-            color: #1E293B !important;
+            color: #FFFFFF !important;
         }
 
         /* Esconder Elementos Default Streamlit p/ Limpeza */
@@ -228,10 +233,11 @@ def update_sheet_cell(service, spreadsheet_id, row_idx, col_idx, value):
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id, range=range_name,
             valueInputOption="USER_ENTERED", body=body).execute()
-        return True
+        return True, ""
     except Exception as e:
-        print(f"Erro ao atualizar planilha: {e}")
-        return False
+        erro_str = str(e)
+        print(f"Erro ao atualizar planilha: {erro_str}")
+        return False, erro_str
 
 @st.cache_data(ttl=120)
 def carregar_dados():
@@ -614,8 +620,20 @@ def render_ajustes(df_ajustes):
             novo_valor = "SIM" if val else ""
             service = get_google_sheets_service()
             if service:
-                update_sheet_cell(service, ID_AJUSTES, r_idx, c_idx, novo_valor)
+                try:
+                    success, msg = update_sheet_cell(service, ID_AJUSTES, r_idx, c_idx, novo_valor)
+                    if success:
+                        st.toast(f"Status salvo na planilha!", icon="✅")
+                    else:
+                        st.session_state['erro_update'] = msg
+                except Exception as e:
+                    st.session_state['erro_update'] = str(e)
                 st.cache_data.clear()
+
+    # Mostrar erro se houver
+    if 'erro_update' in st.session_state:
+        st.error(f"⚠️ Erro ao salvar (A planilha tem permissão de edição?): {st.session_state['erro_update']}")
+        del st.session_state['erro_update']
 
     # Layout de Grid para Tickets
     cols_per_row = 3
