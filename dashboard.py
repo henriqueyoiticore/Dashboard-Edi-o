@@ -8,8 +8,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Escopos necessários para ler o Google Sheets
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+# Escopos necessários para ler e escrever no Google Sheets
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # IDs das planilhas (Extraídos dos links originais)
 ID_AJUSTES = '1y8bw87uE8xkYFJMhKWbu-9Az1d6D8U3lJ5r_lfrjziI'
@@ -196,19 +196,42 @@ def get_sheet_data(service, spreadsheet_id, range_name, silent=False):
         # Ajusta as linhas para terem o mesmo tamanho do cabeçalho
         num_cols = len(header)
         adjusted_data = []
-        for row in data:
+        for i, row in enumerate(data):
             if len(row) < num_cols:
                 row.extend([''] * (num_cols - len(row)))
             elif len(row) > num_cols:
                 row = row[:num_cols]
+            row.append(i + 2) # ROW INDEX no Google Sheets (1-indexed + header)
             adjusted_data.append(row)
 
+        header.append('_SheetRowIdx')
         df = pd.DataFrame(adjusted_data, columns=header)
         return df
     except Exception as e:
         if not silent:
             st.error(f"Erro ao ler a planilha ID {spreadsheet_id}: {e}")
         return pd.DataFrame()
+
+def update_sheet_cell(service, spreadsheet_id, row_idx, col_idx, value):
+    """Atualiza uma célula específica na planilha."""
+    try:
+        # Converter col_idx (0-based) para letra da coluna
+        dividend = col_idx + 1
+        col_letter = ''
+        while dividend > 0:
+            modulo = (dividend - 1) % 26
+            col_letter = chr(65 + modulo) + col_letter
+            dividend = int((dividend - modulo) / 26)
+        
+        range_name = f"{col_letter}{row_idx}"
+        body = {'values': [[value]]}
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id, range=range_name,
+            valueInputOption="USER_ENTERED", body=body).execute()
+        return True
+    except Exception as e:
+        print(f"Erro ao atualizar planilha: {e}")
+        return False
 
 @st.cache_data(ttl=120)
 def carregar_dados():
@@ -580,6 +603,20 @@ def render_ajustes(df_ajustes):
         st.warning("Nenhum ajuste encontrado para os termos buscados.")
         return
 
+    # Encontrar coluna de Status
+    col_status = next((c for c in df_ajustes.columns if 'status' in c.lower() or 'demandado' in c.lower()), None)
+    idx_status = df_ajustes.columns.get_loc(col_status) if col_status else None
+
+    # Callback para atualizar a planilha quando o checkbox mudar
+    def on_demanda_change(t_id, r_idx, c_idx):
+        if c_idx is not None:
+            val = st.session_state[t_id]
+            novo_valor = "SIM" if val else ""
+            service = get_google_sheets_service()
+            if service:
+                update_sheet_cell(service, ID_AJUSTES, r_idx, c_idx, novo_valor)
+                st.cache_data.clear()
+
     # Layout de Grid para Tickets
     cols_per_row = 3
     rows = [df_display.iloc[i:i+cols_per_row] for i in range(0, len(df_display), cols_per_row)]
@@ -591,8 +628,19 @@ def render_ajustes(df_ajustes):
                 # Identifier único para o checkbox no session_state
                 ticket_id = f"demanda_{ticket[col_nome]}_{ticket[col_data]}"
                 
+                # Estado inicial do checkbox baseado na planilha
+                is_demandado = False
+                if col_status and pd.notna(ticket.get(col_status)):
+                    is_demandado = str(ticket[col_status]).strip().upper() == "SIM"
+
                 # Container do Card com Borda e Checkbox
-                demanded = st.checkbox("Demandado", key=ticket_id)
+                demanded = st.checkbox(
+                    "Demandado", 
+                    value=is_demandado, 
+                    key=ticket_id,
+                    on_change=on_demanda_change,
+                    args=(ticket_id, ticket['_SheetRowIdx'], idx_status)
+                )
                 
                 # Filtrar ajustes para exibir no card (respeitando a regra de ignorar "OK" e vazios)
                 lista_ajustes = []
@@ -670,4 +718,3 @@ with st.spinner("FrameControl Engine Initializing..."):
             render_ajustes(df_ajustes_p)
     else:
         st.warning("Falha ao carregar dados. Verifique a autenticação.")
-
