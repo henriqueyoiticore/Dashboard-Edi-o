@@ -100,6 +100,12 @@ st.markdown("""
             color: #FFFFFF !important;
         }
 
+        /* Ajuste de Cor - Elemento 7 conforme solicitado (Fundo Escuro = Texto Branco) */
+        #root > div:nth-child(1) > div.withScreencast > div > div > div > section > div.stMainBlockContainer > div > div:nth-child(7) *,
+        div[data-testid="stMainBlockContainer"] > div:first-child > div:nth-child(7) * {
+            color: #FFFFFF !important;
+        }
+
         /* Esconder Elementos Default Streamlit p/ Limpeza */
         #MainMenu, footer {visibility: hidden;}
     </style>
