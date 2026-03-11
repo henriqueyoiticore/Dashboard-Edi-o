@@ -55,35 +55,6 @@ st.markdown("""
             font-family: 'Inter', sans-serif;
         }
 
-        /* Corrigir para spans e divs específicos (exceto ícones e elementos escuros) */
-        .stApp span:not([data-testid="stIcon"]), 
-        .stApp div:not([data-testid="stIcon"]) {
-             color: #1E293B !important;
-        }
-
-        /* EXCEÇÃO: Botões Primary precisam de letra CLARA, Botões Secundários (Default) precisam de letra ESCURA */
-        .stButton button[kind="primary"], .stButton button[kind="primary"] p {
-            color: #FFFFFF !important;
-        }
-        
-        .stButton button[kind="secondary"], .stButton button[kind="secondary"] p {
-            color: #1E293B !important;
-            border-color: var(--border-subtle) !important;
-        }
-
-        /* Forçar texto visível, mas respeitar os componentes escuros */
-        .stApp div[data-baseweb="select"] div,
-        .stApp div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
-        .stApp div[data-baseweb="input"] input,
-        .stApp input::placeholder {
-            color: #1E293B !important; 
-        }
-
-        /* Modificar a cor do placeholder para contraste */
-        .stApp input::placeholder {
-            color: rgba(30, 41, 59, 0.6) !important;
-        }
-
         /* Sidebar - Fundo Branco e Texto Escuro */
         [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child {
             background-color: #FFFFFF !important;
