@@ -38,7 +38,7 @@ st.markdown("""
             --surface-card: #FFFFFF;
             --accent-primary: #8B5CF6;
             --text-primary: #1E293B;
-            --text-secondary: #334155;
+            --text-secondary: #FFFFFF;
             --border-subtle: rgba(0,0,0,0.06);
             --status-error: #EF4444;
             --status-warning: #F59E0B;
