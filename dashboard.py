@@ -98,15 +98,7 @@ st.markdown("""
         /* Corrigir inputs (Selectbox) para texto claro (fundo escuro) */
         [data-baseweb="select"] div {
             color: #FFFFFF !important;
-        }
 
-        /* Ajuste de Cor - Elemento 7 conforme solicitado (Fundo Escuro = Texto Branco) */
-        #root > div:nth-child(1) > div.withScreencast > div > div > div > section > div.stMainBlockContainer > div > div:nth-child(7) *,
-        div[data-testid="stMainBlockContainer"] > div:first-child > div:nth-child(7) * {
-            color: #FFFFFF !important;
-        }
-
-        /* Esconder Elementos Default Streamlit p/ Limpeza */
         #MainMenu, footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
@@ -612,7 +604,7 @@ def render_dossie(df_ocorrencias, df_ocorrencias_fora, df_ajustes, df_prioridade
         m4.metric("Vídeos em Pauta", len(res_pr))
 
         # 4. Blocos de Informação
-        tab1, tab2, tab3 = st.tabs(["🕒 Histórico de Ocorrências", "🎫 Tickets de Ajuste", "🎬 Status de Produção"])
+        tab1, tab2, tab3, tab4 = st.tabs(["🕒 Histórico de Ocorrências", "🎫 Tickets de Ajuste", "🎬 Status de Produção", "🚨 Incidentes Externos"])
 
         with tab1:
             st.markdown("### Histórico Consolidado de Incidentes")
@@ -664,6 +656,14 @@ def render_dossie(df_ocorrencias, df_ocorrencias_fora, df_ajustes, df_prioridade
                     st.warning(f"⚠️ Existem {len(atrasados)} vídeos com entrega pendente para este cliente.")
             else:
                 st.info("Cliente não encontrado na pauta de produção atual.")
+
+        with tab4:
+            st.markdown("### Incidentes Fora da Edição")
+            if not res_of.empty:
+                cols_of = [c for c in res_of.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
+                st.dataframe(res_of[cols_of], use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum incidente externo registrado para este cliente.")
 
     else:
         # Tela inicial do dossiê
