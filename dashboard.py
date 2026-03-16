@@ -305,19 +305,22 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
             return pd.to_datetime(s, errors='coerce', dayfirst=True)
 
         # Processar Ajustes (Tickets)
-        col_data_aj = find_date_col(df_ajustes)
-        df_ajustes['DataSort'] = df_ajustes[col_data_aj].apply(robust_date_parse)
-        df_ajustes = df_ajustes.sort_values('DataSort', ascending=False)
+        if not df_ajustes.empty:
+            col_data_aj = find_date_col(df_ajustes)
+            df_ajustes['DataSort'] = df_ajustes[col_data_aj].apply(robust_date_parse)
+            df_ajustes = df_ajustes.sort_values('DataSort', ascending=False)
 
         # Processar Ocorrências
-        col_data = find_date_col(df_ocorrencias)
-        df_ocorrencias['Data'] = df_ocorrencias[col_data].apply(robust_date_parse)
-        df_ocorrencias['Mes_Ano'] = df_ocorrencias['Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
+        if not df_ocorrencias.empty:
+            col_data = find_date_col(df_ocorrencias)
+            df_ocorrencias['Data'] = df_ocorrencias[col_data].apply(robust_date_parse)
+            df_ocorrencias['Mes_Ano'] = df_ocorrencias['Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
         
         # Processar Erros Fora
-        col_data_fora = find_date_col(df_ocorrencias_fora)
-        df_ocorrencias_fora['Data'] = df_ocorrencias_fora[col_data_fora].apply(robust_date_parse)
-        df_ocorrencias_fora['Mes_Ano'] = df_ocorrencias_fora['Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
+        if not df_ocorrencias_fora.empty:
+            col_data_fora = find_date_col(df_ocorrencias_fora)
+            df_ocorrencias_fora['Data'] = df_ocorrencias_fora[col_data_fora].apply(robust_date_parse)
+            df_ocorrencias_fora['Mes_Ano'] = df_ocorrencias_fora['Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
         
         # Processar Folha (Já vem com Mes_Ano do carregar_dados)
         if not df_folha.empty:
@@ -337,43 +340,48 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
             df_prioridades['_Mes_Ano'] = df_prioridades['_Data'].dt.strftime('%m/%Y').fillna('Desconhecido')
 
         # Ordenar por data (Mais recentes primeiro)
-        df_ocorrencias = df_ocorrencias.sort_values('Data', ascending=False)
-        df_ocorrencias_fora = df_ocorrencias_fora.sort_values('Data', ascending=False)
-        df_folha = df_folha.sort_values('Data', ascending=False) if not df_folha.empty else df_folha
+        if not df_ocorrencias.empty and 'Data' in df_ocorrencias.columns:
+            df_ocorrencias = df_ocorrencias.sort_values('Data', ascending=False)
+        if not df_ocorrencias_fora.empty and 'Data' in df_ocorrencias_fora.columns:
+            df_ocorrencias_fora = df_ocorrencias_fora.sort_values('Data', ascending=False)
+        if not df_folha.empty and 'Data' in df_folha.columns:
+            df_folha = df_folha.sort_values('Data', ascending=False)
 
         # 📌 MANTENDO OS DADOS BRUTOS E CRIANDO O ÍNDICE DE PROLIXIDADE
-        col_descricao = next((col for col in df_ocorrencias.columns if any(k in col.lower() for k in ['detalhamento', 'descri', 'ocorrencia'])), df_ocorrencias.columns[3] if len(df_ocorrencias.columns) > 3 else df_ocorrencias.columns[-1])
-        df_ocorrencias['Texto_Bruto'] = df_ocorrencias[col_descricao].fillna("Sem descrição")
-        
-        # 📌 NOVA CATEGORIZAÇÃO DE OCORRÊNCIAS (SEÇÃO EDIÇÃO)
-        def categorizar(texto):
-            t = str(texto).lower()
-            if any(q in t for q in ['prazo', 'atraso', 'demora', 'quando', 'cade', 'cadê', 'cobrança', 'pronto', 'prontos', 'falta', 'hoje', 'ainda n', 'dia']): return "COBRANÇA DE PRAZO"
-            if any(q in t for q in ['simples', 'rápido', 'fácil', 'pequeno', 'tarja', 'logo', 'texto']): return "TAREFA SIMPLES"
-            if any(q in t for q in ['problema', 'erro', 'falha', 'técnico', 'áudio', 'render', 'corrompido', 'som', 'ruído']): return "PROBLEMA TÉCNICO"
-            if any(q in t for q in ['múltiplos', 'vários', 'lote', 'pacote', 'mais de um', 'dois', 'três', 'bloco']): return "MÚLTIPLOS VÍDEOS"
-            if any(q in t for q in ['ajuste', 'correção', 'corrigir', 'mudar', 'alterar', 'refazer', 'cor', 'corte']): return "AJUSTES/CORREÇÕES"
-            if any(q in t for q in ['doc', 'documento', 'drive', 'link', 'pasta']): return "CORREÇÕES (VIA DOCS)"
-            if any(q in t for q in ['crític', 'urgente', 'cliente', 'pra ontem', 'reclam']): return "CRÍTICO/URGENTE"
-            if any(q in t for q in ['status', 'como está', 'andamento', 'feito']): return "STATUS DE CORREÇÕES"
-            if any(q in t for q in ['formato', 'reels', 'shorts', 'tiktok', 'quadrado', 'horizontal', 'vertical', 'proporção', 'broll', 'b-roll', 'inserção']): return "MUDANÇA DE FORMATO"
-            if any(q in t for q in ['pendente', 'esqueceu', 'não foi']): return "VÍDEOS PENDENTES"
-            return "OUTROS"
+        if not df_ocorrencias.empty:
+            col_descricao = next((col for col in df_ocorrencias.columns if any(k in col.lower() for k in ['detalhamento', 'descri', 'ocorrencia'])), df_ocorrencias.columns[3] if len(df_ocorrencias.columns) > 3 else df_ocorrencias.columns[-1])
+            df_ocorrencias['Texto_Bruto'] = df_ocorrencias[col_descricao].fillna("Sem descrição")
             
-        df_ocorrencias['Tipo_Ocorrência'] = df_ocorrencias['Texto_Bruto'].apply(categorizar)
+            # 📌 NOVA CATEGORIZAÇÃO DE OCORRÊNCIAS (SEÇÃO EDIÇÃO)
+            def categorizar(texto):
+                t = str(texto).lower()
+                if any(q in t for q in ['prazo', 'atraso', 'demora', 'quando', 'cade', 'cadê', 'cobrança', 'pronto', 'prontos', 'falta', 'hoje', 'ainda n', 'dia']): return "COBRANÇA DE PRAZO"
+                if any(q in t for q in ['simples', 'rápido', 'fácil', 'pequeno', 'tarja', 'logo', 'texto']): return "TAREFA SIMPLES"
+                if any(q in t for q in ['problema', 'erro', 'falha', 'técnico', 'áudio', 'render', 'corrompido', 'som', 'ruído']): return "PROBLEMA TÉCNICO"
+                if any(q in t for q in ['múltiplos', 'vários', 'lote', 'pacote', 'mais de um', 'dois', 'três', 'bloco']): return "MÚLTIPLOS VÍDEOS"
+                if any(q in t for q in ['ajuste', 'correção', 'corrigir', 'mudar', 'alterar', 'refazer', 'cor', 'corte']): return "AJUSTES/CORREÇÕES"
+                if any(q in t for q in ['doc', 'documento', 'drive', 'link', 'pasta']): return "CORREÇÕES (VIA DOCS)"
+                if any(q in t for q in ['crític', 'urgente', 'cliente', 'pra ontem', 'reclam']): return "CRÍTICO/URGENTE"
+                if any(q in t for q in ['status', 'como está', 'andamento', 'feito']): return "STATUS DE CORREÇÕES"
+                if any(q in t for q in ['formato', 'reels', 'shorts', 'tiktok', 'quadrado', 'horizontal', 'vertical', 'proporção', 'broll', 'b-roll', 'inserção']): return "MUDANÇA DE FORMATO"
+                if any(q in t for q in ['pendente', 'esqueceu', 'não foi']): return "VÍDEOS PENDENTES"
+                return "OUTROS"
+                
+            df_ocorrencias['Tipo_Ocorrência'] = df_ocorrencias['Texto_Bruto'].apply(categorizar)
 
         # 📌 NOVA CATEGORIZAÇÃO DE OCORRÊNCIAS (FORA DA EDIÇÃO)
-        def categorizar_fora(texto):
-            t = str(texto).lower()
-            if any(q in t for q in ['status', 'planilha', 'não mudaram', 'não colocaram', 'saber que tem', 'manual']): return "PROCESSO/STATUS (PLANILHA)"
-            if any(q in t for q in ['corrompido', 'grava', 'áudio', 'ruim', 'inalterado', 'separado', 'incompleto', 'baixa qualidade']): return "PROB. TÉCNICO (GRAVAÇÃO)"
-            if any(q in t for q in ['desorganizado', 'bagunça', 'quebra cabeça', 'procurar', 'pasta', 'drive', 'Dropbox']): return "DESORGANIZAÇÃO DE DRIVE"
-            if any(q in t for q in ['upload', 'subiu', 'demora', 'atraso', 'link']): return "ATRASO DE UPLOAD/LINK"
-            if any(q in t for q in ['ajuste', 'alteração', 'meses depois', 'tempo depois', 'antigo', 'refazer', 'picado']): return "AJUSTES TARDIOS/PICADOS"
-            return "OUTROS"
+        if not df_ocorrencias_fora.empty:
+            def categorizar_fora(texto):
+                t = str(texto).lower()
+                if any(q in t for q in ['status', 'planilha', 'não mudaram', 'não colocaram', 'saber que tem', 'manual']): return "PROCESSO/STATUS (PLANILHA)"
+                if any(q in t for q in ['corrompido', 'grava', 'áudio', 'ruim', 'inalterado', 'separado', 'incompleto', 'baixa qualidade']): return "PROB. TÉCNICO (GRAVAÇÃO)"
+                if any(q in t for q in ['desorganizado', 'bagunça', 'quebra cabeça', 'procurar', 'pasta', 'drive', 'Dropbox']): return "DESORGANIZAÇÃO DE DRIVE"
+                if any(q in t for q in ['upload', 'subiu', 'demora', 'atraso', 'link']): return "ATRASO DE UPLOAD/LINK"
+                if any(q in t for q in ['ajuste', 'alteração', 'meses depois', 'tempo depois', 'antigo', 'refazer', 'picado']): return "AJUSTES TARDIOS/PICADOS"
+                return "OUTROS"
 
-        col_desc_fora = next((col for col in df_ocorrencias_fora.columns if any(k in col.lower() for k in ['incidente', 'descri', 'ocorrencia'])), df_ocorrencias_fora.columns[1] if len(df_ocorrencias_fora.columns) > 1 else df_ocorrencias_fora.columns[-1])
-        df_ocorrencias_fora['Tipo_Ocorrência'] = df_ocorrencias_fora[col_desc_fora].fillna("Sem descrição").apply(categorizar_fora)
+            col_desc_fora = next((col for col in df_ocorrencias_fora.columns if any(k in col.lower() for k in ['incidente', 'descri', 'ocorrencia'])), df_ocorrencias_fora.columns[1] if len(df_ocorrencias_fora.columns) > 1 else df_ocorrencias_fora.columns[-1])
+            df_ocorrencias_fora['Tipo_Ocorrência'] = df_ocorrencias_fora[col_desc_fora].fillna("Sem descrição").apply(categorizar_fora)
 
     except Exception as e:
         st.warning(f"Aviso no tratamento dos dados: {e}")
