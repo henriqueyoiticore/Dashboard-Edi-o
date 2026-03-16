@@ -676,19 +676,6 @@ def render_dossie(df_ocorrencias, df_ocorrencias_fora, df_ajustes, df_prioridade
     else:
         # Tela inicial do dossiê
         st.info("Use a busca acima para encontrar o histórico de um cliente específico.")
-        
-        # Mostrar os Top 5 clientes com mais ocorrências como sugestão
-        st.divider()
-        st.subheader("🔎 Sugestões (Clientes com mais ocorrências)")
-        col_n_oc_sug = next((c for c in df_ocorrencias.columns if 'mentorado' in c.lower() or 'cliente' in c.lower()), None)
-        if not df_ocorrencias.empty and col_n_oc_sug:
-            top_c = df_ocorrencias[col_n_oc_sug].value_counts().head(5)
-            cols_suggestion = st.columns(len(top_c) if len(top_c) > 0 else 1)
-            for i, (name, count) in enumerate(top_c.items()):
-                with cols_suggestion[i]:
-                    if st.button(f"📄 {name[:15]}...", key=f"sug_{i}"):
-                        st.session_state['search_dossie_val'] = name
-                        st.rerun()
 
 def render_ajustes(df_ajustes):
     render_header("Ajustes de Edição", "Gestão de Tickets | Solicitações de Clientes")
