@@ -442,10 +442,14 @@ def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridad
     total_fora_controle = len(df_ocorrencias_fora)
     total_videos = int(df_folha['_Producao'].sum()) if not df_folha.empty and '_Producao' in df_folha.columns else 0
 
-    col1, col2, col3 = st.columns(3)
+    cobrancas_prazo = len(df_ocorrencias[df_ocorrencias['Tipo_Ocorrência'] == 'COBRANÇA DE PRAZO']) if not df_ocorrencias.empty and 'Tipo_Ocorrência' in df_ocorrencias.columns else 0
+    ocorrencias_internas = total_ocorrencias_gerais - total_fora_controle - cobrancas_prazo
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1: st.metric("Vídeos Produzidos", f"{total_videos:,}".replace(',', '.'))
     with col2: st.metric("Incidentes Totais", total_ocorrencias_gerais)
     with col3: st.metric("Erros Fora do Controle", total_fora_controle)
+    with col4: st.metric("Ocorrências Internas Edição", ocorrencias_internas)
     
     st.divider()
 
