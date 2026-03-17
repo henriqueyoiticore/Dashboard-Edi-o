@@ -98,6 +98,25 @@ st.markdown("""
         /* Corrigir inputs (Selectbox) para texto claro (fundo escuro) */
         [data-baseweb="select"] div {
             color: #FFFFFF !important;
+        }
+
+        /* Forçar contraste nos botões que recebem bug de dark mode no cloud */
+        [data-testid="stButton"] button,
+        [data-testid="stPopover"] button,
+        [data-testid="baseButton-secondary"] {
+            background-color: #1E293B !important;
+            border-color: #1E293B !important;
+        }
+        
+        /* Força a cor do texto de absolutamente TUDO dentro do botao */
+        [data-testid="stButton"] button,
+        [data-testid="stButton"] button *,
+        [data-testid="stPopover"] button,
+        [data-testid="stPopover"] button *,
+        [data-testid="baseButton-secondary"],
+        [data-testid="baseButton-secondary"] * {
+            color: #FFFFFF !important;
+        }
 
         #MainMenu, footer {visibility: hidden;}
     </style>
@@ -570,116 +589,7 @@ def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridad
         if not v_semana.empty: st.dataframe(v_semana[c_v], use_container_width=True, hide_index=True)
         else: st.info("Fila vazia para esta semana.")
 
-def render_dossie(df_ocorrencias, df_ocorrencias_fora, df_ajustes, df_prioridades):
-    render_header("Dossiê do Cliente", "Histórico Consolidado | Visão 360º")
-    
-    # Barra de busca centralizada
-    col_s1, col_s2, col_s3 = st.columns([1, 2, 1])
-    with col_s2:
-        # Usar session_state para permitir que botões de sugestão preencham a busca
-        if 'search_dossie_val' not in st.session_state:
-            st.session_state['search_dossie_val'] = ""
-            
-        nome_busca = st.text_input("👤 Nome do Cliente", value=st.session_state['search_dossie_val'], placeholder="Digite o nome para gerar o dossiê...", help="Busca em todas as bases de dados")
-        btn_gerar = st.button("Gerar Dossiê Completo", use_container_width=True, type="primary")
 
-    if nome_busca or btn_gerar:
-        # Normalizar nomes para busca
-        termo = str(nome_busca).strip().lower()
-        
-        if not termo:
-            st.warning("Por favor, digite um nome para pesquisar.")
-            return
-
-        # 1. Identificar colunas de nome em cada base
-        col_n_aj = next((c for c in df_ajustes.columns if 'nome' in c.lower()), None)
-        col_n_oc = next((c for c in df_ocorrencias.columns if 'mentorado' in c.lower() or 'cliente' in c.lower()), None)
-        col_n_of = next((c for c in df_ocorrencias_fora.columns if 'cliente' in c.lower()), None)
-        col_n_pr = next((c for c in df_prioridades.columns if 'nome' in c.lower()), None)
-
-        # 2. Filtrar Dados
-        res_aj = df_ajustes[df_ajustes[col_n_aj].astype(str).str.lower().str.contains(termo, na=False)] if col_n_aj else pd.DataFrame()
-        res_oc = df_ocorrencias[df_ocorrencias[col_n_oc].astype(str).str.lower().str.contains(termo, na=False)] if col_n_oc else pd.DataFrame()
-        res_of = df_ocorrencias_fora[df_ocorrencias_fora[col_n_of].astype(str).str.lower().str.contains(termo, na=False)] if col_n_of else pd.DataFrame()
-        res_pr = df_prioridades[df_prioridades[col_n_pr].astype(str).str.lower().str.contains(termo, na=False)] if col_n_pr else pd.DataFrame()
-
-        if res_aj.empty and res_oc.empty and res_of.empty and res_pr.empty:
-            st.error(f"Nenhum registro encontrado para '{nome_busca}'.")
-            return
-
-        # 3. Métricas de Resumo
-        st.subheader("📊 Resumo de Atividades")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Tickets de Ajuste", len(res_aj))
-        m2.metric("Incidentes (Edição)", len(res_oc))
-        m3.metric("Incidentes (Externos)", len(res_of))
-        m4.metric("Vídeos em Pauta", len(res_pr))
-
-        # 4. Blocos de Informação
-        tab1, tab2, tab3, tab4 = st.tabs(["🕒 Histórico de Ocorrências", "🎫 Tickets de Ajuste", "🎬 Status de Produção", "🚨 Incidentes Externos"])
-
-        with tab1:
-            st.markdown("### Histórico Consolidado de Incidentes")
-            # Unificar ocorrências internas e externas para linha do tempo
-            timeline = []
-            
-            if not res_oc.empty:
-                for _, r in res_oc.iterrows():
-                    timeline.append({
-                        'Data': r.get('Data', 'N/A'),
-                        'Origem': '🛠️ Interno',
-                        'Tipo': r.get('Tipo_Ocorrência', 'Outros'),
-                        'Descrição': r.get('Texto_Bruto', 'N/A')
-                    })
-            
-            if not res_of.empty:
-                col_d_of = next((c for c in df_ocorrencias_fora.columns if 'descri' in c.lower()), 'Descrição')
-                for _, r in res_of.iterrows():
-                    timeline.append({
-                        'Data': r.get('Data', 'N/A'),
-                        'Origem': '🚨 Externo',
-                        'Tipo': r.get('Tipo_Ocorrência', 'Outros'),
-                        'Descrição': r.get(col_d_of, 'N/A')
-                    })
-            
-            if timeline:
-                df_timeline = pd.DataFrame(timeline).sort_values('Data', ascending=False)
-                st.dataframe(df_timeline, use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhuma ocorrência registrada para este cliente.")
-
-        with tab2:
-            st.markdown("### Solicitações de Ajustes (Tickets)")
-            if not res_aj.empty:
-                cols_aj = [c for c in res_aj.columns if not c.startswith('_') and c not in ['Endereço de e-mail']]
-                st.dataframe(res_aj[cols_aj], use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhum ticket de ajuste encontrado.")
-
-        with tab3:
-            st.markdown("### Status Atual na Produção")
-            if not res_pr.empty:
-                cols_pr = [c for c in res_pr.columns if not c.startswith('_')]
-                st.dataframe(res_pr[cols_pr], use_container_width=True, hide_index=True)
-                
-                # Highlight de Atrasos
-                atrasados = res_pr[res_pr['Entregue'].str.lower() != 'entregou']
-                if not atrasados.empty:
-                    st.warning(f"⚠️ Existem {len(atrasados)} vídeos com entrega pendente para este cliente.")
-            else:
-                st.info("Cliente não encontrado na pauta de produção atual.")
-
-        with tab4:
-            st.markdown("### Incidentes Fora da Edição")
-            if not res_of.empty:
-                cols_of = [c for c in res_of.columns if not c.startswith('_') and c not in ['Mes_Ano', 'Data']]
-                st.dataframe(res_of[cols_of], use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhum incidente externo registrado para este cliente.")
-
-    else:
-        # Tela inicial do dossiê
-        st.info("Use a busca acima para encontrar o histórico de um cliente específico.")
 
 def render_ajustes(df_ajustes):
     render_header("Ajustes de Edição", "Gestão de Tickets | Solicitações de Clientes")
@@ -802,9 +712,44 @@ with st.spinner("FrameControl Engine Initializing..."):
         
         st.session_state['df_prioridades_raw'] = df_prioridades_p
         
+        # Lógica de Notificação: Descobrir quantos tickets NOVOS ainda não foram DEMANDADOS
+        qtd_novos = 0
+        if df_ajustes_p is not None and not df_ajustes_p.empty and 'DataSort' in df_ajustes_p.columns:
+            # 1. Obter a data "limite inferior" para não exibir tickets velhos (ex: tickets antigos abandonados)
+            limite_48h = pd.Timestamp.now() - pd.Timedelta(hours=48)
+            
+            # 2. Obter a data da última vez que o usuário visualizou a aba
+            ultima_vista = st.session_state.get('ultima_vista_ajustes', pd.Timestamp('2000-01-01'))
+            
+            # 3. Considerar "Novo" apenas os tickets que são MAIS RECENTES que a última vista E dentro das 48h
+            mask_data = (df_ajustes_p['DataSort'] > ultima_vista) & (df_ajustes_p['DataSort'] > limite_48h)
+            
+            col_status = next((c for c in df_ajustes_p.columns if 'status' in c.lower() or 'demandado' in c.lower()), None)
+            if col_status:
+                mask_status = df_ajustes_p[col_status].astype(str).str.strip().str.upper() != "SIM"
+                qtd_novos = df_ajustes_p[mask_data & mask_status].shape[0]
+            else:
+                qtd_novos = df_ajustes_p[mask_data].shape[0]
+                
+        # Construir o Título da Página de Forma Dinâmica
+        label_ajustes = f"Ajustes (Tickets) 🔴 {qtd_novos}" if qtd_novos > 0 else "Ajustes (Tickets)"
+        
         # Sidebar Navigation
         st.sidebar.title("FrameControl")
-        page = st.sidebar.radio("Navegação", ["Dashboard Principal", "Ajustes (Tickets)", "Dossiê do Cliente"])
+        
+        options = ["Dashboard Principal", label_ajustes]
+        
+        # Preservar navegação mesmo quando a string dinâmica do radio mudar de valor
+        if 'nav_selection' not in st.session_state:
+            st.session_state['nav_selection'] = "Dashboard Principal"
+            
+        nav_idx = 0
+        if "Ajustes" in st.session_state['nav_selection']:
+            nav_idx = 1
+            
+        page = st.sidebar.radio("Navegação", options, index=nav_idx)
+        st.session_state['nav_selection'] = page
+        
         st.sidebar.divider()
         
         # Filtros Globais (apenas para Dashboard)
@@ -831,10 +776,18 @@ with st.spinner("FrameControl Engine Initializing..."):
                 
             render_dashboard(df_ocorrencias_p, df_ocorrencias_fora_p, df_folha_p, df_prioridades_p, df_ranking_editores, filtro_label, map_filtro)
             
-        elif page == "Ajustes (Tickets)":
+        elif page == label_ajustes:
+            # Quando o usuário acessa a aba de Ajustes, atualizamos a 'ultima_vista_ajustes'
+            # para a data do ticket mais recente (ou o "agora" se estiver vazia)
+            if df_ajustes_p is not None and not df_ajustes_p.empty and 'DataSort' in df_ajustes_p.columns:
+                max_data = df_ajustes_p['DataSort'].max()
+                if pd.notna(max_data):
+                    st.session_state['ultima_vista_ajustes'] = max_data
+            else:
+                st.session_state['ultima_vista_ajustes'] = pd.Timestamp.now()
+                
+            # Ocultamos do display se ele acabou de ver tudo!
             render_ajustes(df_ajustes_p)
             
-        elif page == "Dossiê do Cliente":
-            render_dossie(df_ocorrencias_p, df_ocorrencias_fora_p, df_ajustes_p, df_prioridades_p)
     else:
         st.warning("Falha ao carregar dados. Verifique a autenticação.")
