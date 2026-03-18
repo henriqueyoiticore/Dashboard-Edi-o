@@ -328,6 +328,7 @@ def preparar_dados(df_ajustes, df_folha, df_ocorrencias, df_ocorrencias_fora, df
             col_data_aj = find_date_col(df_ajustes)
             df_ajustes['DataSort'] = df_ajustes[col_data_aj].apply(robust_date_parse)
             df_ajustes = df_ajustes.sort_values('DataSort', ascending=False)
+            df_ajustes['Mes_Ano'] = df_ajustes['DataSort'].dt.strftime('%m/%Y').fillna('Desconhecido')
 
         # Processar Ocorrências
         if not df_ocorrencias.empty:
@@ -424,7 +425,7 @@ def render_header(titulo, subtitulo):
 </div>
 """, unsafe_allow_html=True)
 
-def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridades, df_ranking_editores, filtro_label, map_filtro):
+def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridades, df_ranking_editores, df_ajustes, filtro_label, map_filtro):
     render_header("Painel Gerencial - Setor de Edição de Vídeos", "Diretoria de Operações | Monitoramento de Edição")
     
     # ---------------- FILTRO MENSAL SIDEBAR ----------------
@@ -438,6 +439,8 @@ def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridad
             df_folha = df_folha[df_folha['Mes_Ano'] == filtro_mes]
         if not df_prioridades.empty and '_Mes_Ano' in df_prioridades.columns:
             df_prioridades = df_prioridades[df_prioridades['_Mes_Ano'] == filtro_mes]
+        if df_ajustes is not None and not df_ajustes.empty and 'Mes_Ano' in df_ajustes.columns:
+            df_ajustes = df_ajustes[df_ajustes['Mes_Ano'] == filtro_mes]
 
     # ---------------- PREPARAÇÃO DO RANKING DE EDITORES ----------------
     df_ranking_edit_local = pd.DataFrame(columns=['Editor', 'Demandas'])
@@ -464,11 +467,62 @@ def render_dashboard(df_ocorrencias, df_ocorrencias_fora, df_folha, df_prioridad
     cobrancas_prazo = len(df_ocorrencias[df_ocorrencias['Tipo_Ocorrência'] == 'COBRANÇA DE PRAZO']) if not df_ocorrencias.empty and 'Tipo_Ocorrência' in df_ocorrencias.columns else 0
     ocorrencias_internas = total_ocorrencias_gerais - total_fora_controle - cobrancas_prazo
 
-    col1, col2, col3, col4 = st.columns(4)
+    # --- NOVO CÁLCULO Média de Vídeos por Ocorrência ---
+    import re
+    total_videos_incidentes = 0
+    total_oc_valida = 0
+
+    if df_ajustes is not None and not df_ajustes.empty:
+        cols_videos = [c for c in df_ajustes.columns if 'deo' in c.lower()]
+        ignorados = ["", "ok", "não tinha vídeo", "nenhum", "nada", "-", "não tem video", "nao tem video", "nda", "não tem", "nao tem"]
+        
+        def conta_ajuste(row):
+            count = 0
+            for c in cols_videos:
+                val = str(row[c]).strip().lower()
+                if val not in ignorados: count += 1
+            return count
+            
+        videos_no_ajuste = df_ajustes.apply(conta_ajuste, axis=1)
+        total_videos_incidentes += videos_no_ajuste.sum()
+        total_oc_valida += len(df_ajustes)
+        
+    if not df_ocorrencias.empty and 'Tipo_Ocorrência' in df_ocorrencias.columns and 'Texto_Bruto' in df_ocorrencias.columns:
+        df_oc_ajustes = df_ocorrencias[df_ocorrencias['Tipo_Ocorrência'].isin(['AJUSTES/CORREÇÕES', 'CORREÇÕES (VIA DOCS)'])]
+        
+        def contar_videos_texto(texto):
+            if pd.isna(texto): return 0
+            txt = str(texto).lower()
+            matches = re.findall(r'(?i)\bv[ií]deo\s+\d+', txt)
+            if matches: return len(matches)
+            simples = re.findall(r'(?i)\bv[ií]deo\b(?!\s*s\b)', txt)
+            return max(1, len(simples)) if simples else (1 if len(txt) > 15 else 0)
+            
+        videos_na_oc = df_oc_ajustes['Texto_Bruto'].apply(contar_videos_texto)
+        total_videos_incidentes += videos_na_oc.sum()
+        total_oc_valida += len(df_oc_ajustes)
+        
+    media_videos = round(float(total_videos_incidentes) / total_oc_valida, 1) if total_oc_valida > 0 else 0
+    
+    # --- NOVO CÁLCULO Taxa de Ajustes (%) ---
+    if total_videos > 0:
+        taxa_ajustes_num = ((ocorrencias_internas * media_videos) / total_videos) * 100
+        taxa_ajustes_str = f"{taxa_ajustes_num:.1f}%".replace('.', ',')
+    else:
+        taxa_ajustes_str = "Aguardando fechamento"
+
+    # ---------------- RENDER UI MÉTRICAS ----------------
+    col1, col2, col3 = st.columns(3)
     with col1: st.metric("Vídeos Produzidos", f"{total_videos:,}".replace(',', '.'))
     with col2: st.metric("Incidentes Totais", total_ocorrencias_gerais)
     with col3: st.metric("Erros Fora do Controle", total_fora_controle)
-    with col4: st.metric("Ocorrências Internas Edição", ocorrencias_internas)
+    
+    st.markdown("<hr style='margin: 0.5em 0; border: none; border-top: 2px dashed #E2E8F0;'/>", unsafe_allow_html=True)
+    
+    col4, col5, col6 = st.columns(3)
+    with col4: st.metric("Ocorrências Internas", ocorrencias_internas)
+    with col5: st.metric("Média de Ajst", media_videos)
+    with col6: st.metric("Taxa de Ajustes", taxa_ajustes_str)
     
     st.divider()
 
@@ -773,8 +827,8 @@ with st.spinner("FrameControl Engine Initializing..."):
             if st.sidebar.button("🔄 Atualizar Dados"):
                 st.cache_data.clear()
                 st.rerun()
-                
-            render_dashboard(df_ocorrencias_p, df_ocorrencias_fora_p, df_folha_p, df_prioridades_p, df_ranking_editores, filtro_label, map_filtro)
+            # Agora os tickets também sofrem reload de filtro de tempo dentro da função
+            render_dashboard(df_ocorrencias_p, df_ocorrencias_fora_p, df_folha_p, df_prioridades_p, df_ranking_editores, df_ajustes_p, filtro_label, map_filtro)
             
         elif page == label_ajustes:
             # Quando o usuário acessa a aba de Ajustes, atualizamos a 'ultima_vista_ajustes'
